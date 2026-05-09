@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"name": "寵物旅館與美容系統",
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "pet-care-system"
+	}
+}

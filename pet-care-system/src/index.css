@@ -1,0 +1,476 @@
+@import "tailwindcss";
+
+:root {
+  --brand-dark: #3d1a0d;
+  --brand-main: #6b3a2a;
+  --brand-main-2: #8b5040;
+  --brand-soft: #fdf6f0;
+  --brand-cream: #f5ede8;
+  --brand-gold: #c8a97e;
+  --brand-rose: #b87868;
+  --brand-blue: #6f9fc2;
+  --brand-green: #5f8a5f;
+}
+
+body {
+  margin: 0;
+  background: #fffefe;
+  color: #2f211c;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ===== Common UI ===== */
+
+.card-soft {
+  border: 1px solid #f0e6df;
+  box-shadow: 0 10px 30px rgba(107, 58, 42, 0.08);
+}
+
+.input-soft {
+  width: 100%;
+  border: 1px solid #eadfd8;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  outline: none;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.input-soft:focus {
+  box-shadow: 0 0 0 3px rgba(200, 169, 126, 0.3);
+  border-color: #c8a97e;
+}
+
+.btn-main {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--brand-main);
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.btn-main:hover {
+  background: var(--brand-main-2);
+  transform: translateY(-1px);
+}
+
+/* ===== Animation Keyframes ===== */
+
+@keyframes floatSlow {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes floatCard {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes softPop {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 6px 18px rgba(107, 58, 42, 0.06);
+  }
+
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 10px 24px rgba(107, 58, 42, 0.1);
+  }
+}
+
+@keyframes dogBounce {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-8px) rotate(-1deg);
+  }
+}
+
+@keyframes blobMove1 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(20px, -10px);
+  }
+}
+
+@keyframes blobMove2 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(-15px, 12px);
+  }
+}
+
+@keyframes hintBounce {
+  0%,
+  100% {
+    transform: translateY(0px);
+    opacity: 0.75;
+  }
+
+  50% {
+    transform: translateY(6px);
+    opacity: 1;
+  }
+}
+
+@keyframes starTwinkle {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  50% {
+    transform: scale(1.12);
+    filter: brightness(1.15);
+  }
+}
+
+@keyframes pawDrift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-12px) rotate(4deg);
+  }
+}
+
+/* ===== Animation Classes ===== */
+
+.float-slow {
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
+.float-card {
+  animation: floatCard 5s ease-in-out infinite;
+}
+
+.fade-up {
+  animation: fadeUp 0.8s ease forwards;
+}
+
+.fade-up.delay-1 {
+  animation-delay: 0.15s;
+}
+
+.fade-up.delay-2 {
+  animation-delay: 0.3s;
+}
+
+.soft-pop {
+  animation: softPop 3s ease-in-out infinite;
+}
+
+.dog-bounce {
+  animation: dogBounce 2.8s ease-in-out infinite;
+}
+
+.blob-1 {
+  animation: blobMove1 8s ease-in-out infinite;
+}
+
+.blob-2 {
+  animation: blobMove2 10s ease-in-out infinite;
+}
+
+.scroll-hint {
+  animation: hintBounce 2s ease-in-out infinite;
+  color: #8b6b5a;
+  font-size: 14px;
+}
+
+.paw-drift {
+  animation: pawDrift 5s ease-in-out infinite;
+}
+
+/* ===== Interactive Cards ===== */
+
+.service-card {
+  transition: all 0.35s ease;
+  box-shadow: 0 8px 28px rgba(107, 58, 42, 0.04);
+}
+
+.service-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 18px 36px rgba(107, 58, 42, 0.1);
+}
+
+.feature-card {
+  transition: all 0.35s ease;
+  box-shadow: 0 8px 24px rgba(107, 58, 42, 0.04);
+}
+
+.feature-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 36px rgba(107, 58, 42, 0.1);
+}
+
+.stat-card {
+  animation: fadeUp 0.9s ease forwards;
+  opacity: 0;
+}
+
+.stat-delay-0 {
+  animation-delay: 0.2s;
+}
+
+.stat-delay-1 {
+  animation-delay: 0.35s;
+}
+
+.stat-delay-2 {
+  animation-delay: 0.5s;
+}
+
+.pulse-hover {
+  transition: all 0.3s ease;
+}
+
+.pulse-hover:hover {
+  transform: translateY(-4px) scale(1.02);
+}
+
+.star-row svg {
+  animation: starTwinkle 2.5s ease-in-out infinite;
+}
+
+.star-row svg:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.star-row svg:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.star-row svg:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+.star-row svg:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+/* ===== Smoother Page Feeling ===== */
+
+.page-enter {
+  animation: fadeUp 0.65s ease forwards;
+}
+
+.hover-lift {
+  transition: all 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 16px 32px rgba(107, 58, 42, 0.1);
+}
+
+/* ===== Optional: reduce motion for accessibility ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  .float-slow,
+  .float-card,
+  .fade-up,
+  .soft-pop,
+  .dog-bounce,
+  .blob-1,
+  .blob-2,
+  .scroll-hint,
+  .paw-drift,
+  .stat-card,
+  .star-row svg,
+  .page-enter {
+    animation: none !important;
+  }
+
+  .service-card:hover,
+  .feature-card:hover,
+  .pulse-hover:hover,
+  .hover-lift:hover {
+    transform: none !important;
+  }
+
+  /* ===== 明顯版首頁動畫 ===== */
+
+@keyframes bigBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-18px) scale(1.05);
+  }
+  60% {
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@keyframes cardFloatStrong {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-18px) rotate(1deg);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(35px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pawMove {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.08;
+  }
+  50% {
+    transform: translateY(-25px) rotate(12deg);
+    opacity: 0.18;
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.08;
+  }
+}
+
+@keyframes buttonPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 10px 25px rgba(107, 58, 42, 0.25);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 16px 35px rgba(107, 58, 42, 0.38);
+  }
+}
+
+@keyframes starPop {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.25) rotate(8deg);
+  }
+}
+
+.hero-title-animate {
+  animation: fadeSlideIn 0.9s ease-out both;
+}
+
+.hero-text-animate {
+  animation: fadeSlideIn 1s ease-out both;
+  animation-delay: 0.15s;
+}
+
+.hero-button-animate {
+  animation: buttonPulse 2.2s ease-in-out infinite;
+}
+
+.hero-dog-animate {
+  animation: bigBounce 1.8s ease-in-out infinite;
+}
+
+.hero-card-animate {
+  animation: cardFloatStrong 3.2s ease-in-out infinite;
+}
+
+.hero-paw-animate {
+  animation: pawMove 3.5s ease-in-out infinite;
+}
+
+.hero-star-animate {
+  animation: starPop 1.8s ease-in-out infinite;
+}
+
+.hero-star-animate:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.hero-star-animate:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.hero-star-animate:nth-child(4) {
+  animation-delay: 0.45s;
+}
+
+.hero-star-animate:nth-child(5) {
+  animation-delay: 0.6s;
+}
+
+.home-card-hover {
+  transition: all 0.3s ease;
+}
+
+.home-card-hover:hover {
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 45px rgba(107, 58, 42, 0.18);
+}
+}
