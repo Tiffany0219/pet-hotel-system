@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-
-const API_BASE = "http://127.0.0.1:5000/api";
+import { API_BASE } from "../config";
 
 interface User {
   id: string;
@@ -14,13 +13,13 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<User | null>;
   register: (
     email: string,
     password: string,
     name: string,
     phone: string
-  ) => Promise<boolean>;
+  ) => Promise<User | null>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -101,9 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(data.token);
       setUser(data.user);
 
-      return true;
+      return data.user;
     } catch (error) {
-      return false;
+      return null;
     }
   };
 
@@ -127,9 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(data.token);
       setUser(data.user);
 
-      return true;
+      return data.user;
     } catch (error) {
-      return false;
+      return null;
     }
   };
 

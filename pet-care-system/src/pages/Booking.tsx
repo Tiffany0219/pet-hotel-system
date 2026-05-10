@@ -1,5 +1,3 @@
-const API_BASE = "http://127.0.0.1:5000/api";
-
 import { useState, useEffect } from "react";
 import type { ReactNode, ReactElement } from "react";
 import { useAuth } from "../contexts/AuthContext";
@@ -17,6 +15,7 @@ import {
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
+import { API_BASE } from "../config";
 
 interface Pet {
   id: string;

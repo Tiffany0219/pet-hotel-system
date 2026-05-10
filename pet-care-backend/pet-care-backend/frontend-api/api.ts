@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:5000/api";
+const API_BASE = "http://127.0.0.1:5050/api";
 
 export function getToken() {
   return localStorage.getItem("token");
@@ -94,14 +94,48 @@ export const orderApi = {
       method: "PATCH",
     }),
 
-  updateStatus: (id: string, status: string) =>
-    request(`/orders/${id}/status`, {
+  review: (id: string, payload: { rating: number; review: string }) =>
+    request(`/orders/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+};
+
+export const adminApi = {
+  stats: () => request("/admin/stats"),
+
+  orders: () => request("/admin/orders"),
+
+  assignmentOptions: () => request("/admin/assignments/options"),
+
+  updateOrderStatus: (id: string, status: string) =>
+    request(`/admin/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
 
-  review: (id: string, payload: { rating: number; review: string }) =>
-    request(`/orders/${id}/review`, {
+  updateOrderAssignment: (
+    id: string,
+    payload: {
+      assignedSpot: string;
+      scheduledTime: string;
+      assignmentNote: string;
+    }
+  ) =>
+    request(`/admin/orders/${id}/assignment`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  createCareLog: (
+    id: string,
+    payload: {
+      logType: string;
+      message: string;
+      visibleToCustomer: boolean;
+    }
+  ) =>
+    request(`/admin/orders/${id}/care-logs`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

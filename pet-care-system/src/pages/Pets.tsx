@@ -17,8 +17,8 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-
-const API_BASE = "http://127.0.0.1:5000/api";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { API_BASE } from "../config";
 
 const petImages = [
   {
@@ -109,6 +109,8 @@ export default function Pets() {
   const [formData, setFormData] = useState<PetForm>(initial);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletePetId, setDeletePetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -242,11 +244,8 @@ export default function Pets() {
   };
 
   const del = async (id: string) => {
-    const ok = confirm("確定要刪除此寵物資料嗎？");
-
-    if (!ok) return;
-
     try {
+      setDeleting(true);
       const token = localStorage.getItem("token");
 
       const response = await fetch(`${API_BASE}/pets/${id}`, {
@@ -264,10 +263,13 @@ export default function Pets() {
       }
 
       toast.success("寵物已刪除");
+      setDeletePetId(null);
       await loadPets();
     } catch (error) {
       console.error(error);
       toast.error("無法連線到後端，請確認 Flask 是否已啟動");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -280,6 +282,7 @@ export default function Pets() {
   const selectedImages = petImages.filter(
     (img) => img.species === formData.species || img.species === "其他"
   );
+  const deletePet = pets.find((pet) => pet.id === deletePetId) || null;
 
   if (loading) {
     return (
@@ -685,7 +688,7 @@ export default function Pets() {
                         </button>
 
                         <button
-                          onClick={() => del(pet.id)}
+                          onClick={() => setDeletePetId(pet.id)}
                           className="flex-1 inline-flex items-center justify-center gap-1 py-2.5 border border-[#b87868] text-[#b87868] rounded-full hover:bg-[#fff0f0] transition-all text-sm"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -700,6 +703,25 @@ export default function Pets() {
           )}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={Boolean(deletePet)}
+        title="刪除此寵物資料？"
+        description={
+          deletePet
+            ? `「${deletePet.name}」的資料刪除後無法從畫面復原。若已有歷史訂單，建議先確認不再需要這筆資料。`
+            : ""
+        }
+        confirmText="刪除寵物"
+        tone="danger"
+        loading={deleting}
+        onCancel={() => setDeletePetId(null)}
+        onConfirm={() => {
+          if (deletePet) {
+            del(deletePet.id);
+          }
+        }}
+      />
     </div>
   );
 }

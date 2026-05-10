@@ -13,10 +13,11 @@ import {
   Clock3,
   CircleX,
   MessageSquare,
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-
-const API_BASE = "http://127.0.0.1:5000/api";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { API_BASE } from "../config";
 
 interface Order {
   id: string;
@@ -28,12 +29,29 @@ interface Order {
   groomingService?: "basic" | "styling" | "spa";
   startDate: string;
   endDate?: string | null;
+  assignedSpot?: string | null;
+  scheduledTime?: string | null;
+  assignmentNote?: string;
+  careLogs?: CareLog[];
   total: number;
   status: string;
   paymentStatus: string;
+  paymentMethod?: string;
+  paidAmount?: number;
+  balanceDue?: number;
   notes?: string;
   rating?: number | null;
   review?: string | null;
+  createdAt: string;
+}
+
+interface CareLog {
+  id: string;
+  orderId: string;
+  authorName: string;
+  logType: string;
+  message: string;
+  visibleToCustomer: boolean;
   createdAt: string;
 }
 
@@ -43,8 +61,11 @@ export default function Orders() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
 
@@ -60,7 +81,7 @@ export default function Orders() {
     spa: "SPA深層護理",
   };
 
-  async function fetchOrders() {
+  async function fetchOrders(showToastOnError = true) {
     try {
       const token = localStorage.getItem("token");
 
@@ -78,9 +99,12 @@ export default function Orders() {
       }
 
       setOrders(data.orders || []);
+      setLastSyncedAt(new Date());
     } catch (error) {
       console.error(error);
-      toast.error("無法連線到後端，請確認 Flask 是否已啟動");
+      if (showToastOnError) {
+        toast.error("無法連線到後端，請確認 Flask 是否已啟動");
+      }
     } finally {
       setLoading(false);
     }
@@ -90,6 +114,16 @@ export default function Orders() {
     if (user) {
       fetchOrders();
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const timer = window.setInterval(() => {
+      fetchOrders(false);
+    }, 10000);
+
+    return () => window.clearInterval(timer);
   }, [user]);
 
   async function handlePay(orderId: string) {
@@ -119,11 +153,8 @@ export default function Orders() {
   }
 
   async function handleCancel(orderId: string) {
-    const ok = confirm("確定要取消此預約嗎？");
-
-    if (!ok) return;
-
     try {
+      setCanceling(true);
       const token = localStorage.getItem("token");
 
       const response = await fetch(`${API_BASE}/orders/${orderId}/cancel`, {
@@ -141,38 +172,13 @@ export default function Orders() {
       }
 
       toast.success("已取消預約");
+      setCancelOrderId(null);
       fetchOrders();
     } catch (error) {
       console.error(error);
       toast.error("取消失敗");
-    }
-  }
-
-  async function handleUpdateStatus(orderId: string, status: string) {
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(`${API_BASE}/orders/${orderId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        toast.error(data.message || "更新狀態失敗");
-        return;
-      }
-
-      toast.success(`訂單已更新為：${status}`);
-      fetchOrders();
-    } catch (error) {
-      console.error(error);
-      toast.error("更新狀態失敗");
+    } finally {
+      setCanceling(false);
     }
   }
 
@@ -217,6 +223,10 @@ export default function Orders() {
     );
   }, [orders]);
 
+  const cancelOrder = useMemo(() => {
+    return sortedOrders.find((order) => order.id === cancelOrderId) || null;
+  }, [cancelOrderId, sortedOrders]);
+
   const activeOrders = sortedOrders.filter(
     (order) => order.status !== "已取消" && order.status !== "已完成"
   );
@@ -253,9 +263,9 @@ export default function Orders() {
   };
 
   const getPaymentBadge = (status: string) => {
-    return status === "已付款"
-      ? "bg-[#f3f7f3] text-[#5f8a5f]"
-      : "bg-[#fff8f2] text-[#b87868]";
+    if (status === "已付款") return "bg-[#f3f7f3] text-[#5f8a5f]";
+    if (status === "已付訂金") return "bg-[#fff8f2] text-[#a97922]";
+    return "bg-[#fff0f0] text-[#b87868]";
   };
 
   if (loading) {
@@ -314,6 +324,23 @@ export default function Orders() {
           <p className="text-xl text-[#6b3a2a] max-w-2xl mx-auto leading-relaxed">
             查看目前預約、已完成服務與已取消紀錄，讓訂單狀態更清楚。
           </p>
+
+          <div className="mt-6 flex flex-col items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => fetchOrders()}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm text-[#6b3a2a] shadow-sm border border-[#eadfd8] hover:bg-[#faf7f4]"
+            >
+              <RefreshCcw className="w-4 h-4" />
+              重新同步
+            </button>
+            <p className="text-xs text-[#8b6b5a]">
+              自動同步中
+              {lastSyncedAt
+                ? `，最後更新 ${lastSyncedAt.toLocaleTimeString()}`
+                : ""}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -358,8 +385,7 @@ export default function Orders() {
                     statusClass={getStatusBadge(order.status)}
                     paymentClass={getPaymentBadge(order.paymentStatus)}
                     onPay={handlePay}
-                    onCancel={handleCancel}
-                    onUpdateStatus={handleUpdateStatus}
+                    onCancel={setCancelOrderId}
                     showActions
                   />
                 ))}
@@ -436,6 +462,25 @@ export default function Orders() {
           onSubmit={() => handleReviewSubmit(reviewOrderId)}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(cancelOrder)}
+        title="取消這筆預約？"
+        description={
+          cancelOrder
+            ? `訂單 #${cancelOrder.id} 取消後會保留紀錄，但無法再從會員端恢復。`
+            : ""
+        }
+        confirmText="取消預約"
+        tone="danger"
+        loading={canceling}
+        onCancel={() => setCancelOrderId(null)}
+        onConfirm={() => {
+          if (cancelOrder) {
+            handleCancel(cancelOrder.id);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -447,7 +492,6 @@ function OrderCard({
   paymentClass,
   onPay,
   onCancel,
-  onUpdateStatus,
   showActions,
 }: {
   order: Order;
@@ -456,7 +500,6 @@ function OrderCard({
   paymentClass: string;
   onPay: (id: string) => void;
   onCancel: (id: string) => void;
-  onUpdateStatus: (id: string, status: string) => void;
   showActions?: boolean;
 }) {
   return (
@@ -510,6 +553,24 @@ function OrderCard({
             value={`NT$ ${order.total.toLocaleString()}`}
             icon={<CreditCard className="w-5 h-5" />}
           />
+
+          <InfoBox
+            label="付款進度"
+            value={paymentSummary(order)}
+            icon={<CreditCard className="w-5 h-5" />}
+          />
+
+          <InfoBox
+            label="店家安排"
+            value={assignmentSummary(order)}
+            icon={
+              order.serviceType === "accommodation" ? (
+                <Home className="w-5 h-5" />
+              ) : (
+                <Scissors className="w-5 h-5" />
+              )
+            }
+          />
         </div>
 
         {order.notes && (
@@ -518,6 +579,33 @@ function OrderCard({
             <p className="text-gray-700 text-sm leading-relaxed">
               {order.notes}
             </p>
+          </div>
+        )}
+
+        {order.careLogs && order.careLogs.length > 0 && (
+          <div className="rounded-2xl bg-[#f7fbff] p-4 mb-5 border border-[#d9eaf5]">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="w-5 h-5 text-[#6f9fc2]" />
+              <p className="text-sm text-[#3d1a0d]">店家照護回報</p>
+            </div>
+
+            <div className="space-y-3">
+              {order.careLogs.slice(0, 3).map((log) => (
+                <div key={log.id} className="rounded-xl bg-white p-3">
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="rounded-full bg-[#edf6fc] px-2.5 py-1 text-xs text-[#3f789f]">
+                      {log.logType}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-sm leading-relaxed text-gray-700">
+                    {log.message}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -540,33 +628,6 @@ function OrderCard({
               >
                 <X className="w-4 h-4" />
                 取消預約
-              </button>
-            )}
-
-            {order.status === "待確認" && (
-              <button
-                onClick={() => onUpdateStatus(order.id, "已確認")}
-                className="px-5 py-2.5 rounded-full bg-[#6f9fc2] text-white hover:opacity-90 transition-all"
-              >
-                確認預約
-              </button>
-            )}
-
-            {order.status === "已確認" && (
-              <button
-                onClick={() => onUpdateStatus(order.id, "進行中")}
-                className="px-5 py-2.5 rounded-full bg-[#c8a97e] text-white hover:opacity-90 transition-all"
-              >
-                開始服務
-              </button>
-            )}
-
-            {order.status === "進行中" && (
-              <button
-                onClick={() => onUpdateStatus(order.id, "已完成")}
-                className="px-5 py-2.5 rounded-full bg-[#5f8a5f] text-white hover:opacity-90 transition-all"
-              >
-                完成服務
               </button>
             )}
           </div>
@@ -616,6 +677,13 @@ function MiniOrderCard({
           NT$ {order.total.toLocaleString()}
         </span>
       </div>
+
+      <p className="mt-2 text-xs text-gray-500">
+        安排：{assignmentSummary(order)}
+      </p>
+      <p className="mt-1 text-xs text-gray-500">
+        付款：{paymentSummary(order)}
+      </p>
 
       {order.status === "已完成" && (
         <div className="mt-3">
@@ -694,6 +762,34 @@ function SideEmpty({ text }: { text: string }) {
       <p className="text-sm text-gray-500">{text}</p>
     </div>
   );
+}
+
+function assignmentSummary(order: Order) {
+  if (order.serviceType === "accommodation") {
+    return order.assignedSpot ? `房位 ${order.assignedSpot}` : "店家尚未安排房位";
+  }
+
+  if (order.assignedSpot && order.scheduledTime) {
+    return `${order.assignedSpot} / ${order.scheduledTime}`;
+  }
+
+  return "店家尚未安排美容台";
+}
+
+function paymentSummary(order: Order) {
+  const paidAmount = order.paidAmount || 0;
+  const balanceDue = order.balanceDue ?? Math.max(0, order.total - paidAmount);
+  const method = order.paymentMethod ? ` / ${order.paymentMethod}` : "";
+
+  if (order.paymentStatus === "已付款") {
+    return `已收 NT$ ${order.total.toLocaleString()}${method}`;
+  }
+
+  if (order.paymentStatus === "已付訂金") {
+    return `已收 NT$ ${paidAmount.toLocaleString()}，尚餘 NT$ ${balanceDue.toLocaleString()}${method}`;
+  }
+
+  return `尚未付款，應付 NT$ ${order.total.toLocaleString()}`;
 }
 
 function InfoBox({

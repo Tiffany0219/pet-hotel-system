@@ -2,12 +2,14 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
+import RequireAdmin from './components/RequireAdmin';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Rooms from './pages/Rooms';
 import Grooming from './pages/Grooming';
 import About from './pages/About';
 import Login from './pages/Login';
+import AdminDashboard from './pages/AdminDashboard';
 import Dashboard from './pages/Dashboard';
 import Pets from './pages/Pets';
 import Booking from './pages/Booking';
@@ -25,6 +27,7 @@ export default function App() {
           <Route path="/grooming" element={<Grooming />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/pets" element={<RequireAuth><Pets /></RequireAuth>} />
           <Route path="/booking" element={<RequireAuth><Booking /></RequireAuth>} />

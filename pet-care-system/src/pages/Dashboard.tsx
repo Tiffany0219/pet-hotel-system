@@ -15,8 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-const API_BASE = "http://127.0.0.1:5000/api";
+import { API_BASE } from "../config";
 
 export default function Dashboard() {
   const { user, refreshUser } = useAuth();

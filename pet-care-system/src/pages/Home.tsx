@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle,
 } from "lucide-react";
+import { API_BASE } from "../config";
 
 type RoomAvailability = {
   capacity: number;
@@ -39,7 +40,7 @@ export default function Home() {
     async function fetchRoomAvailability() {
       try {
         const response = await fetch(
-          `http://127.0.0.1:5000/api/availability/rooms?date=${today}`
+          `${API_BASE}/availability/rooms?date=${today}`
         );
 
         const data = await response.json();

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Calendar,
   ShoppingBag,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
@@ -24,6 +25,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const isAdmin = user?.role === "admin";
 
   const handleLogout = () => {
     logout();
@@ -72,8 +74,12 @@ export default function Layout() {
             {user ? (
               <div className="relative group">
                 <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-[#fdf0e0] text-[#6b3a2a] hover:bg-[#f3e4d7] transition-all border border-[#f0e6df]">
-                  <User className="w-4 h-4" />
-                  <span>{user.name || "會員中心"}</span>
+                  {isAdmin ? (
+                    <ShieldCheck className="w-4 h-4" />
+                  ) : (
+                    <User className="w-4 h-4" />
+                  )}
+                  <span>{isAdmin ? "管理員後台" : user.name || "會員中心"}</span>
                   <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
                 </button>
 
@@ -90,51 +96,68 @@ export default function Layout() {
                       </p>
                     </div>
 
-                    <Link
-                      to="/dashboard"
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
-                    >
-                      <User className="w-5 h-5 text-[#6b3a2a]" />
-                      <div>
-                        <p className="text-sm">會員中心</p>
-                        <p className="text-xs text-gray-400">查看個人資料</p>
-                      </div>
-                    </Link>
+                    {isAdmin ? (
+                      <Link
+                        to="/admin"
+                        className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
+                      >
+                        <ShieldCheck className="w-5 h-5 text-[#6f9fc2]" />
+                        <div>
+                          <p className="text-sm">管理後台</p>
+                          <p className="text-xs text-gray-400">
+                            訂單、房況與營收
+                          </p>
+                        </div>
+                      </Link>
+                    ) : (
+                      <>
+                        <Link
+                          to="/dashboard"
+                          className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
+                        >
+                          <User className="w-5 h-5 text-[#6b3a2a]" />
+                          <div>
+                            <p className="text-sm">會員中心</p>
+                            <p className="text-xs text-gray-400">查看個人資料</p>
+                          </div>
+                        </Link>
 
-                    <Link
-                      to="/pets"
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
-                    >
-                      <PawPrint className="w-5 h-5 text-[#b87868]" />
-                      <div>
-                        <p className="text-sm">我的寵物</p>
-                        <p className="text-xs text-gray-400">管理毛孩資料</p>
-                      </div>
-                    </Link>
+                        <Link
+                          to="/pets"
+                          className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
+                        >
+                          <PawPrint className="w-5 h-5 text-[#b87868]" />
+                          <div>
+                            <p className="text-sm">我的寵物</p>
+                            <p className="text-xs text-gray-400">管理毛孩資料</p>
+                          </div>
+                        </Link>
 
-                    <Link
-                      to="/booking"
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
-                    >
-                      <Calendar className="w-5 h-5 text-[#5f8a5f]" />
-                      <div>
-                        <p className="text-sm">預約服務</p>
-                        <p className="text-xs text-gray-400">
-                          住宿 / 美容預約
-                        </p>
-                      </div>
-                    </Link>
+                        <Link
+                          to="/booking"
+                          className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
+                        >
+                          <Calendar className="w-5 h-5 text-[#5f8a5f]" />
+                          <div>
+                            <p className="text-sm">預約服務</p>
+                            <p className="text-xs text-gray-400">
+                              住宿 / 美容預約
+                            </p>
+                          </div>
+                        </Link>
 
-                    <Link
-                      to="/orders"
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
-                    >
-                      <ShoppingBag className="w-5 h-5 text-[#6f9fc2]" />
-                      <div>
-                        <p className="text-sm">我的訂單</p>
-                        <p className="text-xs text-gray-400">查看預約紀錄</p>
-                      </div>
-                    </Link>
+                        <Link
+                          to="/orders"
+                          className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:bg-[#faf7f4] hover:text-[#6b3a2a] transition-all"
+                        >
+                          <ShoppingBag className="w-5 h-5 text-[#6f9fc2]" />
+                          <div>
+                            <p className="text-sm">我的訂單</p>
+                            <p className="text-xs text-gray-400">查看預約紀錄</p>
+                          </div>
+                        </Link>
+                      </>
+                    )}
 
                     <div className="my-2 border-t border-[#f0e6df]" />
 
@@ -195,37 +218,49 @@ export default function Layout() {
                     <p className="text-xs text-[#9c7060]">{user.email}</p>
                   </div>
 
-                  <Link
-                    onClick={() => setOpen(false)}
-                    to="/dashboard"
-                    className={mobileLinkClass}
-                  >
-                    會員中心
-                  </Link>
+                  {isAdmin ? (
+                    <Link
+                      onClick={() => setOpen(false)}
+                      to="/admin"
+                      className={mobileLinkClass}
+                    >
+                      管理後台
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        onClick={() => setOpen(false)}
+                        to="/dashboard"
+                        className={mobileLinkClass}
+                      >
+                        會員中心
+                      </Link>
 
-                  <Link
-                    onClick={() => setOpen(false)}
-                    to="/pets"
-                    className={mobileLinkClass}
-                  >
-                    我的寵物
-                  </Link>
+                      <Link
+                        onClick={() => setOpen(false)}
+                        to="/pets"
+                        className={mobileLinkClass}
+                      >
+                        我的寵物
+                      </Link>
 
-                  <Link
-                    onClick={() => setOpen(false)}
-                    to="/booking"
-                    className={mobileLinkClass}
-                  >
-                    預約服務
-                  </Link>
+                      <Link
+                        onClick={() => setOpen(false)}
+                        to="/booking"
+                        className={mobileLinkClass}
+                      >
+                        預約服務
+                      </Link>
 
-                  <Link
-                    onClick={() => setOpen(false)}
-                    to="/orders"
-                    className={mobileLinkClass}
-                  >
-                    我的訂單
-                  </Link>
+                      <Link
+                        onClick={() => setOpen(false)}
+                        to="/orders"
+                        className={mobileLinkClass}
+                      >
+                        我的訂單
+                      </Link>
+                    </>
+                  )}
 
                   <button
                     onClick={handleLogout}
