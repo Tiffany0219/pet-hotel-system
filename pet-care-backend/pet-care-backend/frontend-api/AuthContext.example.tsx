@@ -1,4 +1,7 @@
+// @ts-nocheck
+// This example file lives outside the frontend project, so VS Code may not see React types here.
 import { createContext, useContext, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { authApi, setToken, clearToken, getToken } from "./api";
 
 interface User {
@@ -11,33 +14,43 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<User | null>;
   register: (
     email: string,
     password: string,
     name: string,
     phone: string
-  ) => Promise<boolean>;
+  ) => Promise<User | null>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshUser = async () => {
+    try {
+      if (!getToken()) {
+        setUser(null);
+        return;
+      }
+
+      const data = await authApi.me();
+      setUser(data.user);
+    } catch {
+      clearToken();
+      setUser(null);
+    }
+  };
 
   useEffect(() => {
     const restoreUser = async () => {
       try {
-        if (getToken()) {
-          const data = await authApi.me();
-          setUser(data.user);
-        }
-      } catch {
-        clearToken();
-        setUser(null);
+        await refreshUser();
       } finally {
         setLoading(false);
       }
@@ -51,9 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await authApi.login({ email, password });
       setToken(data.token);
       setUser(data.user);
-      return true;
+      return data.user;
     } catch {
-      return false;
+      return null;
     }
   };
 
@@ -67,9 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await authApi.register({ email, password, name, phone });
       setToken(data.token);
       setUser(data.user);
-      return true;
+      return data.user;
     } catch {
-      return false;
+      return null;
     }
   };
 
@@ -79,7 +92,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider
+      value={{ user, login, register, logout, refreshUser, loading }}
+    >
       {children}
     </AuthContext.Provider>
   );

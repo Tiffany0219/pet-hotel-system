@@ -1,5 +1,11 @@
 const API_BASE = "http://127.0.0.1:5050/api";
 
+export type AssignmentOptions = {
+  roomSpots: Record<"standard" | "deluxe" | "vip", string[]>;
+  groomingStations: string[];
+  groomingTimes: string[];
+};
+
 export function getToken() {
   return localStorage.getItem("token");
 }
@@ -108,6 +114,12 @@ export const adminApi = {
 
   assignmentOptions: () => request("/admin/assignments/options"),
 
+  updateAssignmentOptions: (payload: AssignmentOptions) =>
+    request("/admin/assignments/options", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
   updateOrderStatus: (id: string, status: string) =>
     request(`/admin/orders/${id}/status`, {
       method: "PATCH",
@@ -126,6 +138,23 @@ export const adminApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+
+  updateOrderPayment: (
+    id: string,
+    payload: {
+      paymentStatus: "未付款" | "已付訂金" | "已付款";
+      paymentMethod: "未設定" | "現金" | "轉帳" | "信用卡" | "線上付款" | "其他";
+      paidAmount: number;
+    }
+  ) =>
+    request(`/admin/orders/${id}/payment`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  auditLogs: (id: string) => request(`/admin/orders/${id}/audit-logs`),
+
+  careLogs: (id: string) => request(`/admin/orders/${id}/care-logs`),
 
   createCareLog: (
     id: string,
