@@ -6,6 +6,14 @@ export type AssignmentOptions = {
   groomingTimes: string[];
 };
 
+export type SystemUserPayload = {
+  name: string;
+  email?: string;
+  phone: string;
+  password?: string;
+  role: "staff" | "groomer" | "caregiver" | "admin";
+};
+
 export function getToken() {
   return localStorage.getItem("token");
 }
@@ -95,9 +103,10 @@ export const orderApi = {
       method: "PATCH",
     }),
 
-  pay: (id: string) =>
+  pay: (id: string, payload: { paymentMethod: string }) =>
     request(`/orders/${id}/pay`, {
       method: "PATCH",
+      body: JSON.stringify(payload),
     }),
 
   review: (id: string, payload: { rating: number; review: string }) =>
@@ -107,10 +116,68 @@ export const orderApi = {
     }),
 };
 
+export const notificationApi = {
+  list: (includeRead = false) =>
+    request(`/notifications${includeRead ? "?includeRead=1" : ""}`),
+
+  markRead: (id: string) =>
+    request(`/notifications/${id}/read`, {
+      method: "PATCH",
+    }),
+
+  markAllRead: () =>
+    request("/notifications/read-all", {
+      method: "PATCH",
+    }),
+};
+
 export const adminApi = {
   stats: () => request("/admin/stats"),
 
   orders: () => request("/admin/orders"),
+
+  systemUsers: () => request("/admin/system/users"),
+
+  createSystemUser: (payload: Required<SystemUserPayload>) =>
+    request("/admin/system/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateSystemUser: (id: string, payload: SystemUserPayload) =>
+    request(`/admin/system/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteSystemUser: (id: string) =>
+    request(`/admin/system/users/${id}`, {
+      method: "DELETE",
+    }),
+
+  serviceCatalog: () => request("/admin/system/service-catalog"),
+
+  updateServiceCatalog: (payload: any) =>
+    request("/admin/system/service-catalog", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  businessSettings: () => request("/admin/system/business-settings"),
+
+  updateBusinessSettings: (payload: any) =>
+    request("/admin/system/business-settings", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  notificationSettings: () => request("/admin/system/notification-settings"),
+
+  updateNotificationSettings: (payload: any) =>
+    request("/admin/system/notification-settings", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   assignmentOptions: () => request("/admin/assignments/options"),
 
@@ -165,6 +232,29 @@ export const adminApi = {
     }
   ) =>
     request(`/admin/orders/${id}/care-logs`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+};
+
+export const workerApi = {
+  schedule: (date: string) => request(`/worker/schedule?date=${date}`),
+
+  updateOrderStatus: (id: string, status: string) =>
+    request(`/worker/orders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
+  createCareLog: (
+    id: string,
+    payload: {
+      logType: string;
+      message: string;
+      visibleToCustomer: boolean;
+    }
+  ) =>
+    request(`/worker/orders/${id}/care-logs`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

@@ -37,6 +37,12 @@ app.config["SECRET_KEY"] = os.environ.get(
 
 db = SQLAlchemy(app)
 
+APP_TIMEZONE = timezone(timedelta(hours=8))
+
+
+def now_local():
+    return datetime.now(APP_TIMEZONE).replace(tzinfo=None)
+
 
 # =========================
 # Models
@@ -52,7 +58,7 @@ class User(db.Model):
     phone = db.Column(db.String(30), nullable=False)
 
     role = db.Column(db.String(20), default="member")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_local)
 
     pets = db.relationship(
         "Pet",
@@ -85,7 +91,7 @@ class Pet(db.Model):
     notes = db.Column(db.Text, default="")
     image_url = db.Column(db.String(255), default="")
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_local)
 
     orders = db.relationship("Order", backref="pet", lazy=True)
 
@@ -118,7 +124,7 @@ class Order(db.Model):
     rating = db.Column(db.Integer, nullable=True)
     review = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_local)
 
     care_logs = db.relationship(
         "CareLog",
@@ -145,9 +151,26 @@ class CareLog(db.Model):
     message = db.Column(db.Text, nullable=False)
     visible_to_customer = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_local)
 
     author = db.relationship("User", lazy=True)
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey("order.id"), nullable=True)
+
+    type = db.Column(db.String(30), default="info")
+    title = db.Column(db.String(120), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    read_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=now_local)
+
+    user = db.relationship("User", lazy=True)
+    order = db.relationship("Order", lazy=True)
 
 
 class AuditLog(db.Model):
@@ -159,7 +182,7 @@ class AuditLog(db.Model):
     action = db.Column(db.String(60), nullable=False)
     detail = db.Column(db.Text, default="")
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_local)
 
     actor = db.relationship("User", lazy=True)
 
@@ -167,11 +190,11 @@ class AuditLog(db.Model):
 class AppSetting(db.Model):
     key = db.Column(db.String(80), primary_key=True)
     value = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_local)
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=now_local,
+        onupdate=now_local,
     )
 
 
@@ -213,6 +236,29 @@ DEFAULT_ASSIGNMENT_OPTIONS = {
     "groomingTimes": GROOMING_TIMES,
 }
 
+DEFAULT_SERVICE_CATALOG = {
+    "roomPrices": ROOM_PRICES,
+    "groomingPrices": GROOMING_PRICES,
+}
+
+DEFAULT_BUSINESS_SETTINGS = {
+    "weekdayHours": "09:00 - 21:00",
+    "weekendHours": "09:00 - 21:00",
+    "shifts": ["早班 09:00-15:00", "晚班 15:00-21:00"],
+    "closedDates": [],
+}
+
+DEFAULT_NOTIFICATION_SETTINGS = {
+    "bookingReminderHours": 24,
+    "paymentReminderHours": 12,
+    "careLogNotifyCustomer": True,
+    "channels": ["站內通知", "Email"],
+    "staffReminderText": "請確認今日入住、退房、美容與待收款項目。",
+}
+
+SYSTEM_USER_ROLES = ["staff", "groomer", "caregiver", "admin"]
+WORKER_ROLES = {"staff", "groomer", "caregiver", "admin"}
+
 
 # =========================
 # Helpers
@@ -227,6 +273,16 @@ def user_to_dict(user: User):
         "role": user.role,
         "createdAt": user.created_at.isoformat(),
     }
+
+
+def role_label(role: str):
+    return {
+        "member": "會員",
+        "staff": "店務人員",
+        "groomer": "美容師",
+        "caregiver": "寵物照護師",
+        "admin": "系統管理員",
+    }.get(role, role)
 
 
 def pet_to_dict(pet: Pet):
@@ -254,6 +310,19 @@ def care_log_to_dict(log: CareLog):
         "message": log.message,
         "visibleToCustomer": log.visible_to_customer,
         "createdAt": log.created_at.isoformat(),
+    }
+
+
+def notification_to_dict(notification: Notification):
+    return {
+        "id": str(notification.id),
+        "orderId": str(notification.order_id) if notification.order_id else None,
+        "type": notification.type,
+        "title": notification.title,
+        "message": notification.message,
+        "read": notification.read_at is not None,
+        "readAt": notification.read_at.isoformat() if notification.read_at else None,
+        "createdAt": notification.created_at.isoformat(),
     }
 
 
@@ -407,6 +476,162 @@ def save_assignment_options(data):
     return options
 
 
+def get_json_setting(key, default_value):
+    setting = db.session.get(AppSetting, key)
+
+    if not setting:
+        return default_value
+
+    try:
+        value = json.loads(setting.value)
+    except (TypeError, json.JSONDecodeError):
+        return default_value
+
+    return value if isinstance(value, dict) else default_value
+
+
+def save_json_setting(key, value):
+    setting = db.session.get(AppSetting, key)
+    encoded = json.dumps(value, ensure_ascii=False)
+
+    if setting:
+        setting.value = encoded
+    else:
+        db.session.add(AppSetting(key=key, value=encoded))
+
+    return value
+
+
+def normalize_price_map(value, defaults):
+    source = value if isinstance(value, dict) else {}
+    result = {}
+
+    for key, default_price in defaults.items():
+        try:
+            price = int(source.get(key, default_price))
+        except (TypeError, ValueError):
+            price = default_price
+
+        result[key] = max(0, price)
+
+    return result
+
+
+def get_service_catalog():
+    data = get_json_setting("service_catalog", DEFAULT_SERVICE_CATALOG)
+
+    return {
+        "roomPrices": normalize_price_map(
+            data.get("roomPrices"),
+            DEFAULT_SERVICE_CATALOG["roomPrices"],
+        ),
+        "groomingPrices": normalize_price_map(
+            data.get("groomingPrices"),
+            DEFAULT_SERVICE_CATALOG["groomingPrices"],
+        ),
+    }
+
+
+def save_service_catalog(data):
+    catalog = {
+        "roomPrices": normalize_price_map(
+            data.get("roomPrices") if isinstance(data, dict) else None,
+            DEFAULT_SERVICE_CATALOG["roomPrices"],
+        ),
+        "groomingPrices": normalize_price_map(
+            data.get("groomingPrices") if isinstance(data, dict) else None,
+            DEFAULT_SERVICE_CATALOG["groomingPrices"],
+        ),
+    }
+
+    return save_json_setting("service_catalog", catalog)
+
+
+def get_business_settings():
+    data = get_json_setting("business_settings", DEFAULT_BUSINESS_SETTINGS)
+
+    return {
+        "weekdayHours": str(
+            data.get("weekdayHours", DEFAULT_BUSINESS_SETTINGS["weekdayHours"])
+        ).strip(),
+        "weekendHours": str(
+            data.get("weekendHours", DEFAULT_BUSINESS_SETTINGS["weekendHours"])
+        ).strip(),
+        "shifts": normalize_string_list(data.get("shifts"))
+        or list(DEFAULT_BUSINESS_SETTINGS["shifts"]),
+        "closedDates": normalize_string_list(data.get("closedDates")),
+    }
+
+
+def save_business_settings(data):
+    settings = {
+        "weekdayHours": str(data.get("weekdayHours", "")).strip()
+        or DEFAULT_BUSINESS_SETTINGS["weekdayHours"],
+        "weekendHours": str(data.get("weekendHours", "")).strip()
+        or DEFAULT_BUSINESS_SETTINGS["weekendHours"],
+        "shifts": normalize_string_list(data.get("shifts"))
+        or list(DEFAULT_BUSINESS_SETTINGS["shifts"]),
+        "closedDates": normalize_string_list(data.get("closedDates")),
+    }
+
+    return save_json_setting("business_settings", settings)
+
+
+def get_notification_settings():
+    data = get_json_setting("notification_settings", DEFAULT_NOTIFICATION_SETTINGS)
+
+    def safe_int(key):
+        try:
+            return max(0, int(data.get(key, DEFAULT_NOTIFICATION_SETTINGS[key])))
+        except (TypeError, ValueError):
+            return DEFAULT_NOTIFICATION_SETTINGS[key]
+
+    return {
+        "bookingReminderHours": safe_int("bookingReminderHours"),
+        "paymentReminderHours": safe_int("paymentReminderHours"),
+        "careLogNotifyCustomer": bool(
+            data.get(
+                "careLogNotifyCustomer",
+                DEFAULT_NOTIFICATION_SETTINGS["careLogNotifyCustomer"],
+            )
+        ),
+        "channels": normalize_string_list(data.get("channels"))
+        or list(DEFAULT_NOTIFICATION_SETTINGS["channels"]),
+        "staffReminderText": str(
+            data.get(
+                "staffReminderText",
+                DEFAULT_NOTIFICATION_SETTINGS["staffReminderText"],
+            )
+        ).strip(),
+    }
+
+
+def save_notification_settings(data):
+    settings = get_notification_settings()
+
+    if isinstance(data, dict):
+        settings = {
+            "bookingReminderHours": max(
+                0,
+                int(data.get("bookingReminderHours", settings["bookingReminderHours"])),
+            ),
+            "paymentReminderHours": max(
+                0,
+                int(data.get("paymentReminderHours", settings["paymentReminderHours"])),
+            ),
+            "careLogNotifyCustomer": bool(
+                data.get("careLogNotifyCustomer", settings["careLogNotifyCustomer"])
+            ),
+            "channels": normalize_string_list(data.get("channels"))
+            or settings["channels"],
+            "staffReminderText": str(
+                data.get("staffReminderText", settings["staffReminderText"])
+            ).strip(),
+        }
+
+    return save_json_setting("notification_settings", settings)
+
+
 def create_audit_log(action: str, detail: str, order=None):
     actor = getattr(request, "current_user", None)
     audit_log = AuditLog(
@@ -472,12 +697,118 @@ def admin_required(fn):
     @auth_required
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if request.current_user.role != "admin":
-            return jsonify({"message": "需要管理員權限"}), 403
+        if request.current_user.role not in {"staff", "admin"}:
+            return jsonify({"message": "需要店務人員權限"}), 403
 
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+def worker_required(fn):
+    @auth_required
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if request.current_user.role not in WORKER_ROLES:
+            return jsonify({"message": "需要工作人員權限"}), 403
+
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def system_admin_required(fn):
+    @auth_required
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if request.current_user.role != "admin":
+            return jsonify({"message": "需要系統管理員權限"}), 403
+
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def worker_can_access_order(user: User, order: Order):
+    if user.role in {"staff", "admin"}:
+        return True
+
+    if user.role == "groomer":
+        return order.service_type == "grooming"
+
+    if user.role == "caregiver":
+        return order.service_type == "accommodation"
+
+    return False
+
+
+def order_matches_work_date(order: Order, target_date: str):
+    if order.status == "已取消":
+        return False
+
+    if order.service_type == "accommodation":
+        return bool(order.end_date) and order.start_date <= target_date < order.end_date
+
+    return order.start_date == target_date
+
+
+def auto_cancel_expired_orders():
+    today = now_local().date().isoformat()
+    expirable_statuses = ["待確認", "已確認"]
+    expired_orders = (
+        Order.query
+        .filter(
+            Order.status.in_(expirable_statuses),
+            Order.start_date < today,
+        )
+        .all()
+    )
+
+    if not expired_orders:
+        return 0
+
+    for order in expired_orders:
+        previous_status = order.status
+        order.status = "已取消"
+        db.session.add(AuditLog(
+            order_id=order.id,
+            actor_id=None,
+            action="系統自動取消",
+            detail=f"預約日期 {order.start_date} 已逾期，狀態由「{previous_status}」改為「已取消」",
+        ))
+
+    db.session.commit()
+    return len(expired_orders)
+
+
+def create_customer_notification(
+    order: Order,
+    title: str,
+    message: str,
+    notification_type: str = "info",
+):
+    db.session.add(Notification(
+        user_id=order.user_id,
+        order_id=order.id,
+        type=notification_type,
+        title=title,
+        message=message,
+    ))
+
+
+def notify_customer_for_care_log(order: Order, log_type: str, message: str):
+    settings = get_notification_settings()
+
+    if not settings.get("careLogNotifyCustomer", True):
+        return
+
+    is_abnormal = log_type == "異常"
+    create_customer_notification(
+        order,
+        "毛孩異常狀況通知" if is_abnormal else "新的照護回報",
+        f"訂單 #{order.id}（{order.pet.name if order.pet else '毛孩'}）：{message}",
+        "alert" if is_abnormal else "care_log",
+    )
 
 
 def get_room_availability_by_date(target_date: str):
@@ -522,6 +853,77 @@ def check_room_available_for_range(room_type: str, start_date: str, end_date: st
         current += timedelta(days=1)
 
     return True, None
+
+
+def get_grooming_availability_by_date(target_date: str):
+    assignment_options = get_assignment_options()
+    stations = assignment_options["groomingStations"] or GROOMING_STATIONS
+    times = assignment_options["groomingTimes"] or GROOMING_TIMES
+    capacity = len(stations)
+    result = []
+
+    for scheduled_time in times:
+        booked_count = (
+            Order.query
+            .filter(
+                Order.service_type == "grooming",
+                Order.status != "已取消",
+                Order.start_date == target_date,
+                Order.scheduled_time == scheduled_time,
+            )
+            .count()
+        )
+        result.append({
+            "time": scheduled_time,
+            "capacity": capacity,
+            "booked": booked_count,
+            "remaining": max(0, capacity - booked_count),
+        })
+
+    return result
+
+
+def check_grooming_time_available(target_date: str, scheduled_time: str):
+    availability = get_grooming_availability_by_date(target_date)
+    slot = next((item for item in availability if item["time"] == scheduled_time), None)
+
+    if not slot:
+        return False, "此美容時段不存在"
+
+    if slot["remaining"] <= 0:
+        return False, f"{scheduled_time} 美容時段已額滿"
+
+    return True, ""
+
+
+def can_customer_cancel(order: Order):
+    if order.status not in ["待確認", "已確認"]:
+        return False, "此訂單目前不可取消"
+
+    today = now_local().date()
+
+    if order.service_type == "grooming" and order.scheduled_time:
+        try:
+            service_at = datetime.fromisoformat(
+                f"{order.start_date}T{order.scheduled_time}"
+            )
+        except ValueError:
+            service_at = datetime.fromisoformat(f"{order.start_date}T00:00")
+
+        if service_at - now_local() < timedelta(hours=24):
+            return False, "預約前 24 小時內不可自行取消，請聯繫店務人員"
+
+        return True, ""
+
+    try:
+        start_date = datetime.fromisoformat(order.start_date).date()
+    except ValueError:
+        return True, ""
+
+    if start_date <= today:
+        return False, "當日預約不可自行取消，請聯繫店務人員"
+
+    return True, ""
 
 
 def validate_order_assignment(order: Order, assigned_spot: str, scheduled_time: str):
@@ -595,11 +997,13 @@ def calculate_total(data):
     service_type = data.get("serviceType")
 
     if service_type == "accommodation":
+        service_catalog = get_service_catalog()
+        room_prices = service_catalog["roomPrices"]
         room_type = data.get("roomType", "standard")
         start_date = data.get("startDate")
         end_date = data.get("endDate")
 
-        if room_type not in ROOM_PRICES:
+        if room_type not in room_prices:
             raise ValueError("房型不存在")
 
         if not start_date or not end_date:
@@ -613,15 +1017,17 @@ def calculate_total(data):
 
         days = max(1, (end - start).days)
 
-        return ROOM_PRICES[room_type] * days
+        return room_prices[room_type] * days
 
     if service_type == "grooming":
+        service_catalog = get_service_catalog()
+        grooming_prices = service_catalog["groomingPrices"]
         grooming_service = data.get("groomingService", "basic")
 
-        if grooming_service not in GROOMING_PRICES:
+        if grooming_service not in grooming_prices:
             raise ValueError("美容服務不存在")
 
-        return GROOMING_PRICES[grooming_service]
+        return grooming_prices[grooming_service]
 
     raise ValueError("服務類型不存在")
 
@@ -838,6 +1244,7 @@ def delete_pet(pet_id):
 @app.get("/api/orders")
 @auth_required
 def get_orders():
+    auto_cancel_expired_orders()
     orders = (
         Order.query
         .filter_by(user_id=request.current_user.id)
@@ -889,6 +1296,22 @@ def create_order():
             return jsonify({
                 "message": f"{full_date} 此房型已額滿，請選擇其他日期或房型"
             }), 400
+    elif data.get("serviceType") == "grooming":
+        start_date = data.get("startDate")
+        scheduled_time = str(data.get("scheduledTime", "")).strip()
+
+        if not scheduled_time:
+            return jsonify({"message": "請選擇美容預約時段"}), 400
+
+        is_available, message = check_grooming_time_available(
+            start_date,
+            scheduled_time,
+        )
+
+        if not is_available:
+            return jsonify({"message": message}), 400
+    else:
+        return jsonify({"message": "服務類型不存在"}), 400
 
     order = Order(
         user_id=request.current_user.id,
@@ -899,6 +1322,9 @@ def create_order():
         start_date=data.get("startDate"),
         end_date=data.get("endDate")
         if data.get("serviceType") == "accommodation"
+        else None,
+        scheduled_time=data.get("scheduledTime")
+        if data.get("serviceType") == "grooming"
         else None,
         total=total,
         status="待確認",
@@ -929,8 +1355,10 @@ def cancel_order(order_id):
     if not order:
         return jsonify({"message": "找不到訂單"}), 404
 
-    if order.status not in ["待確認", "已確認"]:
-        return jsonify({"message": "此訂單目前不可取消"}), 400
+    can_cancel, message = can_customer_cancel(order)
+
+    if not can_cancel:
+        return jsonify({"message": message}), 400
 
     order.status = "已取消"
     create_audit_log("客戶取消預約", "客戶自行取消預約", order)
@@ -957,10 +1385,21 @@ def pay_order(order_id):
     if order.status == "已取消":
         return jsonify({"message": "已取消的訂單不可付款"}), 400
 
+    data = request.get_json() or {}
+    payment_method = str(data.get("paymentMethod", "線上付款") or "線上付款").strip()
+    allowed_methods = ["現金", "轉帳", "信用卡", "線上付款", "現場付款", "其他"]
+
+    if payment_method not in allowed_methods:
+        return jsonify({"message": "付款方式不正確"}), 400
+
     order.payment_status = "已付款"
-    order.payment_method = "線上付款"
+    order.payment_method = payment_method
     order.paid_amount = order.total
-    create_audit_log("客戶付款", f"線上付款 NT$ {order.total}", order)
+    create_audit_log(
+        "客戶付款",
+        f"{payment_method} NT$ {order.total}",
+        order,
+    )
     db.session.commit()
 
     return jsonify({
@@ -1031,6 +1470,79 @@ def review_order(order_id):
     })
 
 
+@app.get("/api/notifications")
+@auth_required
+def get_notifications():
+    include_read = request.args.get("includeRead") in ["1", "true", "yes"]
+    query = Notification.query.filter_by(user_id=request.current_user.id)
+
+    if not include_read:
+        query = query.filter_by(read_at=None)
+
+    notifications = (
+        query
+        .order_by(Notification.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    unread_count = (
+        Notification.query
+        .filter_by(user_id=request.current_user.id, read_at=None)
+        .count()
+    )
+
+    return jsonify({
+        "notifications": [
+            notification_to_dict(notification)
+            for notification in notifications
+        ],
+        "unreadCount": unread_count,
+    })
+
+
+@app.patch("/api/notifications/<int:notification_id>/read")
+@auth_required
+def mark_notification_read(notification_id):
+    notification = (
+        Notification.query
+        .filter_by(id=notification_id, user_id=request.current_user.id)
+        .first()
+    )
+
+    if not notification:
+        return jsonify({"message": "找不到通知"}), 404
+
+    if not notification.read_at:
+        notification.read_at = now_local()
+        db.session.commit()
+
+    return jsonify({
+        "message": "通知已讀",
+        "notification": notification_to_dict(notification),
+    })
+
+
+@app.patch("/api/notifications/read-all")
+@auth_required
+def mark_all_notifications_read():
+    notifications = (
+        Notification.query
+        .filter_by(user_id=request.current_user.id, read_at=None)
+        .all()
+    )
+    now = now_local()
+
+    for notification in notifications:
+        notification.read_at = now
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "通知已全部標記已讀",
+        "updated": len(notifications),
+    })
+
+
 # =========================
 # Admin APIs
 # =========================
@@ -1038,7 +1550,8 @@ def review_order(order_id):
 @app.get("/api/admin/stats")
 @admin_required
 def admin_stats():
-    today = datetime.now().strftime("%Y-%m-%d")
+    auto_cancel_expired_orders()
+    today = now_local().date().isoformat()
 
     all_orders = Order.query.all()
     valid_orders = [order for order in all_orders if order.status != "已取消"]
@@ -1083,6 +1596,7 @@ def admin_stats():
 @app.get("/api/admin/orders")
 @admin_required
 def admin_get_orders():
+    auto_cancel_expired_orders()
     orders = (
         Order.query
         .order_by(Order.created_at.desc())
@@ -1097,6 +1611,176 @@ def admin_get_orders():
     })
 
 
+@app.get("/api/admin/system/users")
+@system_admin_required
+def admin_system_users():
+    users = (
+        User.query
+        .filter(User.role.in_(SYSTEM_USER_ROLES))
+        .order_by(User.created_at.desc())
+        .all()
+    )
+
+    return jsonify({"users": [user_to_dict(user) for user in users]})
+
+
+@app.post("/api/admin/system/users")
+@system_admin_required
+def admin_create_system_user():
+    data = request.get_json() or {}
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+    name = data.get("name", "").strip()
+    phone = data.get("phone", "").strip()
+    role = data.get("role", "staff")
+
+    if role not in SYSTEM_USER_ROLES:
+        return jsonify({"message": "角色不正確"}), 400
+
+    if not email or not password or not name or not phone:
+        return jsonify({"message": "請填寫帳號、密碼、姓名與電話"}), 400
+
+    if User.query.filter_by(email=email).first():
+        return jsonify({"message": "此電子郵件已被使用"}), 409
+
+    user = User(
+        email=email,
+        password_hash=generate_password_hash(password),
+        name=name,
+        phone=phone,
+        role=role,
+    )
+
+    db.session.add(user)
+    create_audit_log("新增員工帳號", f"新增 {name}（{role_label(role)}）")
+    db.session.commit()
+
+    return jsonify({
+        "message": "員工帳號已新增",
+        "user": user_to_dict(user),
+    }), 201
+
+
+@app.patch("/api/admin/system/users/<int:user_id>")
+@system_admin_required
+def admin_update_system_user(user_id):
+    user = db.session.get(User, user_id)
+
+    if not user or user.role not in SYSTEM_USER_ROLES:
+        return jsonify({"message": "找不到員工帳號"}), 404
+
+    data = request.get_json() or {}
+    role = data.get("role", user.role)
+
+    if role not in SYSTEM_USER_ROLES:
+        return jsonify({"message": "角色不正確"}), 400
+
+    user.name = data.get("name", user.name).strip() or user.name
+    user.phone = data.get("phone", user.phone).strip() or user.phone
+    user.role = role
+
+    password = data.get("password", "")
+    if password:
+        user.password_hash = generate_password_hash(password)
+
+    create_audit_log("更新員工帳號", f"更新 {user.name}（{role_label(user.role)}）")
+    db.session.commit()
+
+    return jsonify({
+        "message": "員工帳號已更新",
+        "user": user_to_dict(user),
+    })
+
+
+@app.delete("/api/admin/system/users/<int:user_id>")
+@system_admin_required
+def admin_delete_system_user(user_id):
+    user = db.session.get(User, user_id)
+
+    if not user or user.role not in SYSTEM_USER_ROLES:
+        return jsonify({"message": "找不到員工帳號"}), 404
+
+    if user.id == request.current_user.id:
+        return jsonify({"message": "不可刪除目前登入的帳號"}), 400
+
+    label = f"{user.name}（{user.email}）"
+    db.session.delete(user)
+    create_audit_log("刪除員工帳號", f"刪除 {label}")
+    db.session.commit()
+
+    return jsonify({"message": "員工帳號已刪除"})
+
+
+@app.get("/api/admin/system/service-catalog")
+@admin_required
+def admin_get_service_catalog():
+    return jsonify(get_service_catalog())
+
+
+@app.patch("/api/admin/system/service-catalog")
+@system_admin_required
+def admin_update_service_catalog():
+    catalog = save_service_catalog(request.get_json() or {})
+    create_audit_log("更新服務價格", "更新住宿房型與美容服務價格")
+    db.session.commit()
+
+    return jsonify({
+        "message": "服務價格已更新",
+        **catalog,
+    })
+
+
+@app.get("/api/admin/system/business-settings")
+@admin_required
+def admin_get_business_settings():
+    return jsonify(get_business_settings())
+
+
+@app.patch("/api/admin/system/business-settings")
+@system_admin_required
+def admin_update_business_settings():
+    settings = save_business_settings(request.get_json() or {})
+    create_audit_log("更新營業設定", "更新營業時間、班表與休假日")
+    db.session.commit()
+
+    return jsonify({
+        "message": "營業設定已更新",
+        **settings,
+    })
+
+
+@app.get("/api/admin/system/notification-settings")
+@admin_required
+def admin_get_notification_settings():
+    return jsonify(get_notification_settings())
+
+
+@app.patch("/api/admin/system/notification-settings")
+@system_admin_required
+def admin_update_notification_settings():
+    try:
+        settings = save_notification_settings(request.get_json() or {})
+    except (TypeError, ValueError):
+        return jsonify({"message": "通知設定格式不正確"}), 400
+
+    create_audit_log("更新通知設定", "更新顧客與店務提醒規則")
+    db.session.commit()
+
+    return jsonify({
+        "message": "通知設定已更新",
+        **settings,
+    })
+
+
+@app.get("/api/public/system-settings")
+def public_system_settings():
+    return jsonify({
+        "serviceCatalog": get_service_catalog(),
+        "businessSettings": get_business_settings(),
+        "notificationSettings": get_notification_settings(),
+    })
+
+
 @app.get("/api/admin/assignments/options")
 @admin_required
 def admin_assignment_options():
@@ -1104,7 +1788,7 @@ def admin_assignment_options():
 
 
 @app.patch("/api/admin/assignments/options")
-@admin_required
+@system_admin_required
 def admin_update_assignment_options():
     options = save_assignment_options(request.get_json() or {})
     create_audit_log("更新營運設定", "更新房位、美容台與美容時段設定")
@@ -1204,7 +1888,7 @@ def admin_update_order_payment(order_id):
         data.get("paymentMethod", order.payment_method or "") or ""
     ).strip()
     allowed_status = ["未付款", "已付訂金", "已付款"]
-    allowed_methods = ["", "未設定", "現金", "轉帳", "信用卡", "線上付款", "其他"]
+    allowed_methods = ["", "未設定", "現金", "轉帳", "信用卡", "線上付款", "現場付款", "其他"]
 
     if payment_status not in allowed_status:
         return jsonify({"message": "付款狀態不正確"}), 400
@@ -1323,6 +2007,12 @@ def admin_create_care_log(order_id):
     )
 
     db.session.add(care_log)
+    if visible_to_customer:
+        notify_customer_for_care_log(
+            order,
+            log_type or "照護",
+            message,
+        )
     create_audit_log(
         "新增照護紀錄",
         f"新增「{log_type or '照護'}」紀錄"
@@ -1335,6 +2025,115 @@ def admin_create_care_log(order_id):
         "message": "照護紀錄已新增",
         "careLog": care_log_to_dict(care_log),
         "order": order_to_dict(order, include_internal_logs=True)
+    }), 201
+
+
+@app.get("/api/worker/schedule")
+@worker_required
+def worker_schedule():
+    auto_cancel_expired_orders()
+    target_date = request.args.get("date") or now_local().date().isoformat()
+    user = request.current_user
+
+    orders = (
+        Order.query
+        .filter(Order.status != "已取消")
+        .order_by(Order.start_date.asc(), Order.scheduled_time.asc(), Order.id.asc())
+        .all()
+    )
+
+    visible_orders = [
+        order_to_dict(order, include_internal_logs=True)
+        for order in orders
+        if worker_can_access_order(user, order)
+        and order_matches_work_date(order, target_date)
+    ]
+
+    return jsonify({
+        "date": target_date,
+        "role": user.role,
+        "orders": visible_orders,
+    })
+
+
+@app.patch("/api/worker/orders/<int:order_id>/status")
+@worker_required
+def worker_update_order_status(order_id):
+    order = db.session.get(Order, order_id)
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    if not worker_can_access_order(request.current_user, order):
+        return jsonify({"message": "無法操作此訂單"}), 403
+
+    data = request.get_json() or {}
+    next_status = data.get("status")
+    allowed_status = ["已確認", "進行中", "已完成"]
+
+    if next_status not in allowed_status:
+        return jsonify({"message": "狀態不正確"}), 400
+
+    previous_status = order.status
+    order.status = next_status
+    create_audit_log(
+        "工作人員更新狀態",
+        f"{role_label(request.current_user.role)}將狀態由「{previous_status}」改為「{next_status}」",
+        order,
+    )
+    db.session.commit()
+
+    return jsonify({
+        "message": "訂單狀態已更新",
+        "order": order_to_dict(order, include_internal_logs=True),
+    })
+
+
+@app.post("/api/worker/orders/<int:order_id>/care-logs")
+@worker_required
+def worker_create_care_log(order_id):
+    order = db.session.get(Order, order_id)
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    if not worker_can_access_order(request.current_user, order):
+        return jsonify({"message": "無法操作此訂單"}), 403
+
+    data = request.get_json() or {}
+    log_type = data.get("logType", "照護").strip() or "照護"
+    message = data.get("message", "").strip()
+    is_abnormal = log_type == "異常"
+    visible_to_customer = True if is_abnormal else bool(
+        data.get("visibleToCustomer", True)
+    )
+
+    if not message:
+        return jsonify({"message": "請輸入照護紀錄內容"}), 400
+
+    care_log = CareLog(
+        order_id=order.id,
+        author_id=request.current_user.id,
+        log_type=log_type,
+        message=message,
+        visible_to_customer=visible_to_customer,
+    )
+
+    db.session.add(care_log)
+    if visible_to_customer:
+        notify_customer_for_care_log(order, log_type, message)
+    create_audit_log(
+        "異常通知家長" if is_abnormal else "工作人員新增照護紀錄",
+        f"{role_label(request.current_user.role)}新增「{log_type}」紀錄"
+        + ("（顯示給客戶）" if visible_to_customer else "（內部）"),
+        order,
+    )
+    db.session.commit()
+
+    return jsonify({
+        "message": "已通知家長" if is_abnormal else "照護紀錄已新增",
+        "careLog": care_log_to_dict(care_log),
+        "order": order_to_dict(order, include_internal_logs=True),
     }), 201
 
 
@@ -1371,13 +2170,26 @@ def get_room_availability():
     target_date = request.args.get("date")
 
     if not target_date:
-        target_date = datetime.now().strftime("%Y-%m-%d")
+        target_date = now_local().date().isoformat()
 
     stats = get_room_availability_by_date(target_date)
 
     return jsonify({
         "date": target_date,
         "rooms": stats,
+    })
+
+
+@app.get("/api/availability/grooming")
+def get_grooming_availability():
+    target_date = request.args.get("date")
+
+    if not target_date:
+        target_date = now_local().date().isoformat()
+
+    return jsonify({
+        "date": target_date,
+        "slots": get_grooming_availability_by_date(target_date),
     })
 
 
@@ -1430,6 +2242,7 @@ def seed_admin_user():
 
     if admin:
         admin.role = "admin"
+        admin.name = "系統管理員"
         db.session.commit()
         return
 
@@ -1442,6 +2255,48 @@ def seed_admin_user():
     )
 
     db.session.add(admin)
+    db.session.commit()
+
+
+def seed_staff_user():
+    staff = User.query.filter_by(email="staff@test.com").first()
+
+    if staff:
+        staff.role = "staff"
+        staff.name = "店務人員"
+        db.session.commit()
+        return
+
+    staff = User(
+        email="staff@test.com",
+        password_hash=generate_password_hash("staff123"),
+        name="店務人員",
+        phone="0900-111-111",
+        role="staff",
+    )
+
+    db.session.add(staff)
+    db.session.commit()
+
+
+def seed_worker_user(email: str, password: str, name: str, phone: str, role: str):
+    worker = User.query.filter_by(email=email).first()
+
+    if worker:
+        worker.role = role
+        worker.name = name
+        db.session.commit()
+        return
+
+    worker = User(
+        email=email,
+        password_hash=generate_password_hash(password),
+        name=name,
+        phone=phone,
+        role=role,
+    )
+
+    db.session.add(worker)
     db.session.commit()
 
 
@@ -1484,6 +2339,21 @@ with app.app_context():
     db.create_all()
     ensure_order_assignment_columns()
     seed_demo_user()
+    seed_staff_user()
+    seed_worker_user(
+        "groomer@test.com",
+        "groomer123",
+        "美容師",
+        "0900-222-222",
+        "groomer",
+    )
+    seed_worker_user(
+        "caregiver@test.com",
+        "care123",
+        "寵物照護師",
+        "0900-333-333",
+        "caregiver",
+    )
     seed_admin_user()
 
 

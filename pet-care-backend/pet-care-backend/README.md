@@ -1,6 +1,6 @@
 # 毛孩樂園後端 API（Flask + SQLite）
 
-這是一個可搭配 React 前端的後端系統，提供會員、寵物、預約、訂單、付款、評價與管理員後台功能。
+這是一個可搭配 React 前端的後端系統，提供會員、寵物、預約、訂單、付款、評價與店務管理後台功能。
 
 ## 功能
 
@@ -12,15 +12,15 @@
 - 取消預約
 - 模擬付款
 - 撰寫評價
-- 管理員查詢全部訂單、更新訂單狀態
-- 管理員查看今日房況、營收、會員與寵物統計
-- 管理員安排住宿房位、美容台與美容時段
-- 管理員可維護住宿房位、美容台與美容時段選項
+- 店務人員查詢全部訂單、更新訂單狀態
+- 店務人員查看今日房況、營收、會員與寵物統計
+- 店務人員安排住宿房位、美容台與美容時段
+- 系統管理員可維護員工帳號、服務價格、住宿房位、美容台、營業班表與通知規則
 - 安排時會檢查房位與美容台時段是否衝突
-- 管理員可登記未付款、已付訂金、已付款與付款方式
-- 管理員新增照護紀錄，並可控制是否顯示給客戶
+- 店務人員可登記未付款、已付訂金、已付款與付款方式
+- 店務人員新增照護紀錄，並可控制是否顯示給客戶
 - 會員可查看自己訂單的公開照護紀錄
-- 管理員可查看訂單操作紀錄，包含狀態、安排、付款與照護紀錄異動
+- 店務人員可查看訂單操作紀錄，包含狀態、安排、付款與照護紀錄異動
 
 ## 安裝與執行
 
@@ -67,7 +67,14 @@ Email: demo@test.com
 Password: demo123
 ```
 
-管理員：
+店務人員：
+
+```txt
+Email: staff@test.com
+Password: staff123
+```
+
+系統管理員：
 
 ```txt
 Email: admin@test.com
@@ -118,6 +125,16 @@ Authorization: `Bearer ${localStorage.getItem("token")}`
 
 - GET `/api/admin/stats`
 - GET `/api/admin/orders`
+- GET `/api/admin/system/users`
+- POST `/api/admin/system/users`
+- PATCH `/api/admin/system/users/:id`
+- DELETE `/api/admin/system/users/:id`
+- GET `/api/admin/system/service-catalog`
+- PATCH `/api/admin/system/service-catalog`
+- GET `/api/admin/system/business-settings`
+- PATCH `/api/admin/system/business-settings`
+- GET `/api/admin/system/notification-settings`
+- PATCH `/api/admin/system/notification-settings`
 - GET `/api/admin/assignments/options`
 - PATCH `/api/admin/assignments/options`
 - PATCH `/api/admin/orders/:id/status`

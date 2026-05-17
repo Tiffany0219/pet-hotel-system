@@ -1,12 +1,36 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Check, Sparkles, ImageIcon } from "lucide-react";
+import {
+  defaultNotificationSettings,
+  defaultServiceCatalog,
+  fetchPublicSystemSettings,
+  type NotificationSettings,
+  type ServiceCatalog,
+} from "../systemSettings";
 
 export default function Grooming() {
+  const [serviceCatalog, setServiceCatalog] =
+    useState<ServiceCatalog>(defaultServiceCatalog);
+  const [notificationSettings, setNotificationSettings] =
+    useState<NotificationSettings>(defaultNotificationSettings);
+
+  useEffect(() => {
+    fetchPublicSystemSettings()
+      .then((settings) => {
+        setServiceCatalog(settings.serviceCatalog);
+        setNotificationSettings(settings.notificationSettings);
+      })
+      .catch((error) => {
+        console.error("讀取系統設定失敗", error);
+      });
+  }, []);
+
   const services = [
     {
       id: "basic",
       name: "基礎洗澡護理",
-      price: 600,
+      price: serviceCatalog.groomingPrices.basic,
       duration: "60分鐘",
       image: "/images/grooming-basic.jpg",
       fallbackEmoji: "🛁",
@@ -26,7 +50,7 @@ export default function Grooming() {
     {
       id: "styling",
       name: "造型剪毛設計",
-      price: 1200,
+      price: serviceCatalog.groomingPrices.styling,
       duration: "90-120分鐘",
       image: "/images/grooming-styling.jpg",
       fallbackEmoji: "✂️",
@@ -40,7 +64,7 @@ export default function Grooming() {
     {
       id: "spa",
       name: "SPA深層護理",
-      price: 1800,
+      price: serviceCatalog.groomingPrices.spa,
       duration: "120-150分鐘",
       image: "/images/grooming-spa.jpg",
       fallbackEmoji: "💆",
@@ -221,6 +245,7 @@ export default function Grooming() {
             title="服務須知"
             items={[
               "建議提前 3 天預約，以保留合適時段",
+              `系統會於服務前 ${notificationSettings.bookingReminderHours} 小時提醒`,
               "寵物須完成基本疫苗接種",
               "取消預約請於 24 小時前告知",
               "若服務過程中發現異常，將即時通知飼主",

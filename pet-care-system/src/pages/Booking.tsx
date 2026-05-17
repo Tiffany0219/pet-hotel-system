@@ -16,6 +16,14 @@ import {
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
 import { API_BASE } from "../config";
+import {
+  defaultServiceCatalog,
+  fetchPublicSystemSettings,
+  priceText,
+  type GroomingService,
+  type RoomType,
+  type ServiceCatalog,
+} from "../systemSettings";
 
 interface Pet {
   id: string;
@@ -30,8 +38,13 @@ interface Pet {
 }
 
 type ServiceType = "accommodation" | "grooming";
-type RoomType = "standard" | "deluxe" | "vip";
-type GroomingService = "basic" | "styling" | "spa";
+
+type GroomingSlot = {
+  time: string;
+  capacity: number;
+  booked: number;
+  remaining: number;
+};
 
 export default function Booking() {
   const { user } = useAuth();
@@ -40,12 +53,17 @@ export default function Booking() {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loadingPets, setLoadingPets] = useState(true);
   const [reloadingPets, setReloadingPets] = useState(false);
+  const [serviceCatalog, setServiceCatalog] =
+    useState<ServiceCatalog>(defaultServiceCatalog);
+  const [groomingSlots, setGroomingSlots] = useState<GroomingSlot[]>([]);
+  const [loadingGroomingSlots, setLoadingGroomingSlots] = useState(false);
 
   const [formData, setFormData] = useState({
     serviceType: "accommodation" as ServiceType,
     petId: "",
     roomType: "standard" as RoomType,
     groomingService: "basic" as GroomingService,
+    scheduledTime: "",
     startDate: format(new Date(), "yyyy-MM-dd"),
     endDate: format(addDays(new Date(), 1), "yyyy-MM-dd"),
     notes: "",
@@ -120,17 +138,55 @@ export default function Booking() {
     loadPetsFromApi();
   }, [user]);
 
-  const roomPrices: Record<RoomType, number> = {
-    standard: 800,
-    deluxe: 1200,
-    vip: 2000,
-  };
+  useEffect(() => {
+    fetchPublicSystemSettings()
+      .then((settings) => setServiceCatalog(settings.serviceCatalog))
+      .catch((error) => {
+        console.error("讀取系統設定失敗", error);
+      });
+  }, []);
 
-  const groomingPrices: Record<GroomingService, number> = {
-    basic: 600,
-    styling: 1200,
-    spa: 1800,
-  };
+  useEffect(() => {
+    if (formData.serviceType !== "grooming") return;
+
+    async function loadGroomingSlots() {
+      try {
+        setLoadingGroomingSlots(true);
+        const response = await fetch(
+          `${API_BASE}/availability/grooming?date=${formData.startDate}`
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          toast.error(data.message || "讀取美容時段失敗");
+          return;
+        }
+
+        const slots: GroomingSlot[] = data.slots || [];
+        setGroomingSlots(slots);
+        setFormData((current) => {
+          const currentSlot = slots.find(
+            (slot) => slot.time === current.scheduledTime && slot.remaining > 0
+          );
+          const firstAvailable = slots.find((slot) => slot.remaining > 0);
+
+          return {
+            ...current,
+            scheduledTime: currentSlot
+              ? current.scheduledTime
+              : firstAvailable?.time || "",
+          };
+        });
+      } catch (error) {
+        console.error(error);
+        toast.error("無法讀取美容時段，請確認後端是否已啟動");
+      } finally {
+        setLoadingGroomingSlots(false);
+      }
+    }
+
+    loadGroomingSlots();
+  }, [formData.serviceType, formData.startDate]);
 
   const roomNames: Record<RoomType, string> = {
     standard: "豪華單人房",
@@ -156,8 +212,8 @@ export default function Booking() {
 
   const total = () =>
     formData.serviceType === "accommodation"
-      ? roomPrices[formData.roomType] * days()
-      : groomingPrices[formData.groomingService];
+      ? serviceCatalog.roomPrices[formData.roomType] * days()
+      : serviceCatalog.groomingPrices[formData.groomingService];
 
   const selectedPet = pets.find((p) => p.id === formData.petId);
 
@@ -188,6 +244,9 @@ export default function Booking() {
         toast.error("退房日期必須晚於入住日期");
         return;
       }
+    } else if (!formData.scheduledTime) {
+      toast.error("請選擇美容預約時段");
+      return;
     }
 
     try {
@@ -377,13 +436,13 @@ export default function Booking() {
                         className="input-soft"
                       >
                         <option value="standard">
-                          豪華單人房 - NT$ 800 / 晚
+                          豪華單人房 - {priceText(serviceCatalog.roomPrices.standard)} / 晚
                         </option>
                         <option value="deluxe">
-                          舒適雙人房 - NT$ 1,200 / 晚
+                          舒適雙人房 - {priceText(serviceCatalog.roomPrices.deluxe)} / 晚
                         </option>
                         <option value="vip">
-                          VIP總統套房 - NT$ 2,000 / 晚
+                          VIP總統套房 - {priceText(serviceCatalog.roomPrices.vip)} / 晚
                         </option>
                       </select>
                     </Field>
@@ -437,13 +496,13 @@ export default function Booking() {
                         className="input-soft"
                       >
                         <option value="basic">
-                          基礎洗澡護理 - NT$ 600 起
+                          基礎洗澡護理 - {priceText(serviceCatalog.groomingPrices.basic)} 起
                         </option>
                         <option value="styling">
-                          造型剪毛設計 - NT$ 1,200 起
+                          造型剪毛設計 - {priceText(serviceCatalog.groomingPrices.styling)} 起
                         </option>
                         <option value="spa">
-                          SPA深層護理 - NT$ 1,800 起
+                          SPA深層護理 - {priceText(serviceCatalog.groomingPrices.spa)} 起
                         </option>
                       </select>
                     </Field>
@@ -462,6 +521,36 @@ export default function Booking() {
                         className="input-soft"
                         required
                       />
+                    </Field>
+
+                    <Field label="美容時段 *">
+                      <select
+                        value={formData.scheduledTime}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            scheduledTime: e.target.value,
+                          })
+                        }
+                        className="input-soft"
+                        required
+                      >
+                        {loadingGroomingSlots ? (
+                          <option value="">讀取時段中...</option>
+                        ) : groomingSlots.length === 0 ? (
+                          <option value="">目前沒有可預約時段</option>
+                        ) : (
+                          groomingSlots.map((slot) => (
+                            <option
+                              key={slot.time}
+                              value={slot.time}
+                              disabled={slot.remaining <= 0}
+                            >
+                              {slot.time}（剩 {slot.remaining} / {slot.capacity}）
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </Field>
                   </>
                 )}
@@ -518,7 +607,13 @@ export default function Booking() {
                       <Row label="住宿天數" value={`${days()} 晚`} />
                     </>
                   ) : (
-                    <Row label="預約日期" value={formData.startDate} />
+                    <>
+                      <Row label="預約日期" value={formData.startDate} />
+                      <Row
+                        label="美容時段"
+                        value={formData.scheduledTime || "尚未選擇"}
+                      />
+                    </>
                   )}
 
                   <div className="border-t border-[#eadfd8] pt-5">

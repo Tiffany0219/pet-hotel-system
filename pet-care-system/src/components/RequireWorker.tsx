@@ -1,7 +1,9 @@
 import { Navigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 
-export default function RequireAdmin({
+const workerRoles = ["staff", "admin", "groomer", "caregiver"];
+
+export default function RequireWorker({
   children,
 }: {
   children: React.ReactNode;
@@ -12,7 +14,7 @@ export default function RequireAdmin({
     return <Navigate to="/login" replace />;
   }
 
-  if (!["staff", "admin"].includes(user.role || "")) {
+  if (!workerRoles.includes(user.role || "")) {
     return <Navigate to="/dashboard" replace />;
   }
 

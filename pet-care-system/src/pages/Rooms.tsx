@@ -13,6 +13,13 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { API_BASE } from "../config";
+import {
+  defaultBusinessSettings,
+  defaultServiceCatalog,
+  fetchPublicSystemSettings,
+  type BusinessSettings,
+  type ServiceCatalog,
+} from "../systemSettings";
 
 type RoomAvailability = {
   capacity: number;
@@ -32,6 +39,10 @@ export default function Rooms() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState("");
+  const [serviceCatalog, setServiceCatalog] =
+    useState<ServiceCatalog>(defaultServiceCatalog);
+  const [businessSettings, setBusinessSettings] =
+    useState<BusinessSettings>(defaultBusinessSettings);
 
   const [availability, setAvailability] = useState<AvailabilityState>({
     standard: { capacity: 5, booked: 0, remaining: 5 },
@@ -70,11 +81,22 @@ export default function Rooms() {
     fetchAvailability();
   }, [selectedDate]);
 
+  useEffect(() => {
+    fetchPublicSystemSettings()
+      .then((settings) => {
+        setServiceCatalog(settings.serviceCatalog);
+        setBusinessSettings(settings.businessSettings);
+      })
+      .catch((error) => {
+        console.error("讀取系統設定失敗", error);
+      });
+  }, []);
+
   const rooms = [
     {
       id: "standard",
       name: "豪華單人房",
-      price: 800,
+      price: serviceCatalog.roomPrices.standard,
       image: "/images/room-standard.jpg",
       fallbackEmoji: "🏠",
       size: "60cm x 80cm",
@@ -98,7 +120,7 @@ export default function Rooms() {
     {
       id: "deluxe",
       name: "舒適雙人房",
-      price: 1200,
+      price: serviceCatalog.roomPrices.deluxe,
       image: "/images/room-deluxe.jpg",
       fallbackEmoji: "🏡",
       size: "100cm x 120cm",
@@ -122,7 +144,7 @@ export default function Rooms() {
     {
       id: "vip",
       name: "VIP總統套房",
-      price: 2000,
+      price: serviceCatalog.roomPrices.vip,
       image: "/images/room-vip.jpg",
       fallbackEmoji: "🏰",
       size: "150cm x 200cm",
@@ -149,7 +171,10 @@ export default function Rooms() {
     {
       icon: Clock,
       title: "入住時間",
-      items: ["入住：09:00 - 21:00", "退房：09:00 - 18:00"],
+      items: [
+        `平日服務：${businessSettings.weekdayHours}`,
+        `假日服務：${businessSettings.weekendHours}`,
+      ],
       bg: "from-[#f7fbff] to-[#e8f3fb]",
       iconBg: "bg-[#6f9fc2]",
     },

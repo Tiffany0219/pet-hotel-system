@@ -14,6 +14,7 @@ import {
   CircleX,
   MessageSquare,
   RefreshCcw,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -65,7 +66,11 @@ export default function Orders() {
 
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [payOrderId, setPayOrderId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("線上付款");
   const [canceling, setCanceling] = useState(false);
+  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
+  const [showCanceledOrders, setShowCanceledOrders] = useState(false);
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
 
@@ -133,8 +138,10 @@ export default function Orders() {
       const response = await fetch(`${API_BASE}/orders/${orderId}/pay`, {
         method: "PATCH",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ paymentMethod }),
       });
 
       const data = await response.json();
@@ -145,6 +152,8 @@ export default function Orders() {
       }
 
       toast.success("付款成功");
+      setPayOrderId(null);
+      setPaymentMethod("線上付款");
       fetchOrders();
     } catch (error) {
       console.error(error);
@@ -226,6 +235,10 @@ export default function Orders() {
   const cancelOrder = useMemo(() => {
     return sortedOrders.find((order) => order.id === cancelOrderId) || null;
   }, [cancelOrderId, sortedOrders]);
+
+  const payOrder = useMemo(() => {
+    return sortedOrders.find((order) => order.id === payOrderId) || null;
+  }, [payOrderId, sortedOrders]);
 
   const activeOrders = sortedOrders.filter(
     (order) => order.status !== "已取消" && order.status !== "已完成"
@@ -384,7 +397,7 @@ export default function Orders() {
                     title={getOrderTitle(order)}
                     statusClass={getStatusBadge(order.status)}
                     paymentClass={getPaymentBadge(order.paymentStatus)}
-                    onPay={handlePay}
+                    onPay={setPayOrderId}
                     onCancel={setCancelOrderId}
                     showActions
                   />
@@ -402,6 +415,8 @@ export default function Orders() {
               icon={<CheckCircle className="w-5 h-5" />}
               count={completedOrders.length}
               tone="green"
+              collapsed={!showCompletedOrders}
+              onToggle={() => setShowCompletedOrders((value) => !value)}
             >
               {completedOrders.length === 0 ? (
                 <SideEmpty text="目前沒有已完成訂單" />
@@ -427,6 +442,8 @@ export default function Orders() {
               icon={<CircleX className="w-5 h-5" />}
               count={canceledOrders.length}
               tone="rose"
+              collapsed={!showCanceledOrders}
+              onToggle={() => setShowCanceledOrders((value) => !value)}
             >
               {canceledOrders.length === 0 ? (
                 <SideEmpty text="目前沒有已取消訂單" />
@@ -481,6 +498,16 @@ export default function Orders() {
           }
         }}
       />
+
+      {payOrder && (
+        <PaymentModal
+          order={payOrder}
+          paymentMethod={paymentMethod}
+          onPaymentMethodChange={setPaymentMethod}
+          onCancel={() => setPayOrderId(null)}
+          onSubmit={() => handlePay(payOrder.id)}
+        />
+      )}
     </div>
   );
 }
@@ -591,9 +618,22 @@ function OrderCard({
 
             <div className="space-y-3">
               {order.careLogs.slice(0, 3).map((log) => (
-                <div key={log.id} className="rounded-xl bg-white p-3">
+                <div
+                  key={log.id}
+                  className={`rounded-xl border p-3 ${
+                    log.logType === "異常"
+                      ? "border-[#f0c8ce] bg-[#fff4f5]"
+                      : "border-transparent bg-white"
+                  }`}
+                >
                   <div className="mb-1 flex items-center justify-between gap-3">
-                    <span className="rounded-full bg-[#edf6fc] px-2.5 py-1 text-xs text-[#3f789f]">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs ${
+                        log.logType === "異常"
+                          ? "bg-[#ffe2e6] text-[#b85c68]"
+                          : "bg-[#edf6fc] text-[#3f789f]"
+                      }`}
+                    >
                       {log.logType}
                     </span>
                     <span className="text-xs text-gray-400">
@@ -717,6 +757,8 @@ function SideSection({
   icon,
   count,
   tone,
+  collapsed,
+  onToggle,
   children,
 }: {
   title: string;
@@ -724,6 +766,8 @@ function SideSection({
   icon: React.ReactNode;
   count: number;
   tone: "green" | "rose";
+  collapsed: boolean;
+  onToggle: () => void;
   children: React.ReactNode;
 }) {
   const toneClass =
@@ -733,7 +777,7 @@ function SideSection({
 
   return (
     <div className="rounded-3xl bg-[#faf7f4] border border-[#f0e6df] p-5">
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div
@@ -746,12 +790,21 @@ function SideSection({
           <p className="text-xs text-gray-500">{subtitle}</p>
         </div>
 
-        <span className={`px-3 py-1 rounded-full text-sm ${toneClass}`}>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm ${toneClass}`}
+        >
           {count}
-        </span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${
+              collapsed ? "" : "rotate-180"
+            }`}
+          />
+        </button>
       </div>
 
-      {children}
+      {!collapsed && <div className="mt-4">{children}</div>}
     </div>
   );
 }
@@ -771,6 +824,10 @@ function assignmentSummary(order: Order) {
 
   if (order.assignedSpot && order.scheduledTime) {
     return `${order.assignedSpot} / ${order.scheduledTime}`;
+  }
+
+  if (order.scheduledTime) {
+    return `美容時段 ${order.scheduledTime}，店家尚未安排美容台`;
   }
 
   return "店家尚未安排美容台";
@@ -877,6 +934,74 @@ function ReviewModal({
             className="flex-1 py-3 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50"
           >
             取消
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PaymentModal({
+  order,
+  paymentMethod,
+  onPaymentMethodChange,
+  onCancel,
+  onSubmit,
+}: {
+  order: Order;
+  paymentMethod: string;
+  onPaymentMethodChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  const methods = ["線上付款", "信用卡", "轉帳", "現金", "現場付款", "其他"];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-[#f0e6df]">
+        <div className="text-center mb-6">
+          <CreditCard className="w-10 h-10 text-[#6b3a2a] mx-auto mb-3" />
+          <h2 className="text-2xl text-[#3d1a0d]">選擇付款方式</h2>
+          <p className="text-sm text-gray-500 mt-2">
+            訂單 #{order.id} 應付 NT$ {order.total.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          {methods.map((method) => (
+            <label
+              key={method}
+              className={`flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 text-sm ${
+                paymentMethod === method
+                  ? "border-[#6b3a2a] bg-[#fdf6f0] text-[#3d1a0d]"
+                  : "border-[#eadfd8] text-gray-600"
+              }`}
+            >
+              <span>{method}</span>
+              <input
+                type="radio"
+                name="paymentMethod"
+                checked={paymentMethod === method}
+                onChange={() => onPaymentMethodChange(method)}
+              />
+            </label>
+          ))}
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 py-3 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            className="flex-1 py-3 rounded-full bg-[#6b3a2a] text-white hover:bg-[#8b5040]"
+          >
+            確認付款
           </button>
         </div>
       </div>

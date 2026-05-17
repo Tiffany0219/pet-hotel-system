@@ -16,6 +16,7 @@ import {
   Scissors,
   Search,
   Settings,
+  Sparkles,
   History,
   UserRound,
   Users,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "../config";
+import { useAuth } from "../contexts/AuthContext";
 
 type AdminView = "today" | "rooms" | "orders" | "settings";
 type ServiceType = "accommodation" | "grooming";
@@ -113,9 +115,39 @@ type AssignmentOptions = {
   groomingTimes: string[];
 };
 
+type SystemRole = "staff" | "groomer" | "caregiver" | "admin";
+
+type SystemUser = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: SystemRole;
+};
+
+type ServiceCatalog = {
+  roomPrices: Record<RoomType, number>;
+  groomingPrices: Record<GroomingService, number>;
+};
+
+type BusinessSettings = {
+  weekdayHours: string;
+  weekendHours: string;
+  shifts: string[];
+  closedDates: string[];
+};
+
+type NotificationSettings = {
+  bookingReminderHours: number;
+  paymentReminderHours: number;
+  careLogNotifyCustomer: boolean;
+  channels: string[];
+  staffReminderText: string;
+};
+
 const statusOptions = ["待確認", "已確認", "進行中", "已完成", "已取消"];
 const paymentStatusOptions = ["未付款", "已付訂金", "已付款"];
-const paymentMethodOptions = ["未設定", "現金", "轉帳", "信用卡", "線上付款", "其他"];
+const paymentMethodOptions = ["未設定", "現金", "轉帳", "信用卡", "線上付款", "現場付款", "其他"];
 const serviceOptions = [
   { value: "全部", label: "全部" },
   { value: "accommodation", label: "住宿" },
@@ -135,6 +167,13 @@ const groomingNames: Record<GroomingService, string> = {
   spa: "SPA 深層護理",
 };
 
+const systemRoleNames: Record<SystemRole, string> = {
+  staff: "店務人員",
+  groomer: "美容師",
+  caregiver: "寵物照護師",
+  admin: "系統管理員",
+};
+
 const defaultAssignmentOptions: AssignmentOptions = {
   roomSpots: {
     standard: ["S-01", "S-02", "S-03", "S-04", "S-05"],
@@ -145,7 +184,36 @@ const defaultAssignmentOptions: AssignmentOptions = {
   groomingTimes: ["09:00", "10:30", "13:00", "14:30", "16:00", "17:30"],
 };
 
+const defaultServiceCatalog: ServiceCatalog = {
+  roomPrices: {
+    standard: 800,
+    deluxe: 1200,
+    vip: 2000,
+  },
+  groomingPrices: {
+    basic: 600,
+    styling: 1200,
+    spa: 1800,
+  },
+};
+
+const defaultBusinessSettings: BusinessSettings = {
+  weekdayHours: "09:00 - 21:00",
+  weekendHours: "09:00 - 21:00",
+  shifts: ["早班 09:00-15:00", "晚班 15:00-21:00"],
+  closedDates: [],
+};
+
+const defaultNotificationSettings: NotificationSettings = {
+  bookingReminderHours: 24,
+  paymentReminderHours: 12,
+  careLogNotifyCustomer: true,
+  channels: ["站內通知", "Email"],
+  staffReminderText: "請確認今日入住、退房、美容與待收款項目。",
+};
+
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOptions>(
@@ -165,6 +233,8 @@ export default function AdminDashboard() {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const token = localStorage.getItem("token");
+  const isSystemAdmin = user?.role === "admin";
+  const staffRoleLabel = isSystemAdmin ? "系統管理員" : "店務人員";
 
   async function api(path: string, options: RequestInit = {}) {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -179,7 +249,7 @@ export default function AdminDashboard() {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(data.message || "後台資料讀取失敗");
+      throw new Error(data.message || "店務資料讀取失敗");
     }
 
     return data;
@@ -204,7 +274,7 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error(error);
       if (showLoading) {
-        toast.error(error instanceof Error ? error.message : "後台資料讀取失敗");
+        toast.error(error instanceof Error ? error.message : "店務資料讀取失敗");
       }
     } finally {
       if (showLoading) {
@@ -545,6 +615,36 @@ export default function AdminDashboard() {
     };
   }, [sortedOrders]);
 
+  const reportMetrics = useMemo(() => {
+    const validOrders = sortedOrders.filter((order) => order.status !== "已取消");
+    const canceledOrders = sortedOrders.filter((order) => order.status === "已取消");
+    const roomUsage = roomTypes.map((roomType) => ({
+      label: roomNames[roomType],
+      count: validOrders.filter((order) => order.roomType === roomType).length,
+    }));
+    const groomingUsage = (["basic", "styling", "spa"] as GroomingService[]).map(
+      (service) => ({
+        label: groomingNames[service],
+        count: validOrders.filter((order) => order.groomingService === service)
+          .length,
+      })
+    );
+    const popular = [...roomUsage, ...groomingUsage].sort(
+      (a, b) => b.count - a.count
+    )[0];
+
+    return {
+      cancelRate: sortedOrders.length
+        ? Math.round((canceledOrders.length / sortedOrders.length) * 100)
+        : 0,
+      popularService: popular?.count ? popular.label : "尚無資料",
+      roomUsage,
+      groomingUsage,
+      groomingWorkload: validOrders.filter((order) => order.serviceType === "grooming").length,
+      careWorkload: validOrders.filter((order) => order.serviceType === "accommodation").length,
+    };
+  }, [sortedOrders]);
+
   const filteredOrders = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
@@ -589,7 +689,7 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-[#f4f6f8] flex items-center justify-center">
         <div className="rounded-lg bg-white border border-gray-200 px-8 py-6 shadow-sm">
-          <p className="text-[#3d1a0d]">正在讀取後台資料...</p>
+          <p className="text-[#3d1a0d]">正在讀取店務資料...</p>
         </div>
       </div>
     );
@@ -603,13 +703,13 @@ export default function AdminDashboard() {
             <div>
               <div className="flex flex-wrap items-center gap-3 mb-2">
                 <span className="rounded-md bg-[#edf6fc] px-2.5 py-1 text-xs text-[#3f789f]">
-                  ADMIN
+                  {staffRoleLabel}
                 </span>
                 <span className="text-sm text-gray-500">
                   營業日 {businessDate || "-"}
                 </span>
               </div>
-              <h1 className="text-3xl text-[#202124]">寵物旅館管理後台</h1>
+              <h1 className="text-3xl text-[#202124]">寵物旅館店務管理後台</h1>
             </div>
 
             <div className="flex flex-col gap-2 sm:items-end">
@@ -658,18 +758,20 @@ export default function AdminDashboard() {
               count={sortedOrders.length}
               onClick={() => setActiveView("orders")}
             />
-            <ViewTab
-              active={activeView === "settings"}
-              icon={<Settings className="w-4 h-4" />}
-              label="營運設定"
-              count={
-                Object.values(assignmentOptions.roomSpots).reduce(
-                  (sum, spots) => sum + spots.length,
-                  0
-                ) + assignmentOptions.groomingStations.length
-              }
-              onClick={() => setActiveView("settings")}
-            />
+            {isSystemAdmin && (
+              <ViewTab
+                active={activeView === "settings"}
+                icon={<Settings className="w-4 h-4" />}
+                label="營運設定"
+                count={
+                  Object.values(assignmentOptions.roomSpots).reduce(
+                    (sum, spots) => sum + spots.length,
+                    0
+                  ) + assignmentOptions.groomingStations.length
+                }
+                onClick={() => setActiveView("settings")}
+              />
+            )}
           </div>
         </div>
       </section>
@@ -685,6 +787,7 @@ export default function AdminDashboard() {
             unpaidOrders={unpaidOrders}
             statusCounts={statusCounts}
             serviceCounts={serviceCounts}
+            reportMetrics={reportMetrics}
             updatingId={updatingId}
             onSelectOrder={setSelectedOrderId}
             onUpdateStatus={updateStatus}
@@ -721,8 +824,9 @@ export default function AdminDashboard() {
           />
         )}
 
-        {activeView === "settings" && (
+        {activeView === "settings" && isSystemAdmin && (
           <SettingsPanel
+            api={api}
             options={assignmentOptions}
             saving={savingSettings}
             onSave={updateAssignmentOptions}
@@ -758,6 +862,7 @@ function TodayWorkspace({
   unpaidOrders,
   statusCounts,
   serviceCounts,
+  reportMetrics,
   updatingId,
   onSelectOrder,
   onUpdateStatus,
@@ -781,6 +886,14 @@ function TodayWorkspace({
   unpaidOrders: Order[];
   statusCounts: Record<string, number>;
   serviceCounts: { accommodation: number; grooming: number };
+  reportMetrics: {
+    cancelRate: number;
+    popularService: string;
+    roomUsage: { label: string; count: number }[];
+    groomingUsage: { label: string; count: number }[];
+    groomingWorkload: number;
+    careWorkload: number;
+  };
   updatingId: string | null;
   onSelectOrder: (id: string) => void;
   onUpdateStatus: (id: string, status: string) => void;
@@ -878,6 +991,40 @@ function TodayWorkspace({
         />
       </section>
 
+      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg text-[#202124]">營運統計報表</h2>
+            <p className="text-sm text-gray-500">
+              熱門服務、取消率與人員工作量摘要
+            </p>
+          </div>
+          <BarChart3 className="w-5 h-5 text-[#6f9fc2]" />
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <MiniStat
+            label="熱門服務"
+            value={reportMetrics.popularService}
+            icon={<Sparkles className="w-4 h-4" />}
+          />
+          <MiniStat
+            label="取消率"
+            value={`${reportMetrics.cancelRate}%`}
+            icon={<AlertTriangle className="w-4 h-4" />}
+          />
+          <MiniStat
+            label="美容工作量"
+            value={reportMetrics.groomingWorkload}
+            icon={<Scissors className="w-4 h-4" />}
+          />
+          <MiniStat
+            label="照護工作量"
+            value={reportMetrics.careWorkload}
+            icon={<Home className="w-4 h-4" />}
+          />
+        </div>
+      </section>
+
       <section className="grid xl:grid-cols-[1fr_320px] gap-6">
         <div>
           <div className="mb-3">
@@ -904,6 +1051,58 @@ function TodayWorkspace({
         </div>
 
         <aside className="space-y-4">
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <SectionHeader
+              title="今日任務清單"
+              caption="店務人員每日處理重點"
+              icon={<ClipboardList className="w-5 h-5" />}
+            />
+
+            <div className="p-4 space-y-2">
+              {[
+                {
+                  label: "確認待確認訂單",
+                  count: workflowColumns.find((item) => item.id === "pending")?.orders.length || 0,
+                },
+                {
+                  label: "安排今日入住與退房",
+                  count:
+                    (workflowColumns.find((item) => item.id === "checkin")?.orders.length || 0) +
+                    (workflowColumns.find((item) => item.id === "checkout")?.orders.length || 0),
+                },
+                {
+                  label: "確認今日美容時段",
+                  count: workflowColumns.find((item) => item.id === "grooming")?.orders.length || 0,
+                },
+                {
+                  label: "補齊未安排位置",
+                  count: unassignedOrders.length,
+                },
+                {
+                  label: "追蹤未付款/尾款",
+                  count: unpaidOrders.length,
+                },
+              ].map((task) => (
+                <div
+                  key={task.label}
+                  className="flex items-center justify-between rounded-lg bg-[#f7f8fa] px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle
+                      className={`w-4 h-4 ${
+                        task.count === 0 ? "text-[#5f8a5f]" : "text-[#c8a15f]"
+                      }`}
+                    />
+                    <span className="text-sm text-[#202124]">{task.label}</span>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs text-gray-600">
+                    {task.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
             <SectionHeader
               title="尚未安排"
@@ -1077,14 +1276,34 @@ function RoomManagement({
 }
 
 function SettingsPanel({
+  api,
   options,
   saving,
   onSave,
 }: {
+  api: (path: string, options?: RequestInit) => Promise<any>;
   options: AssignmentOptions;
   saving: boolean;
   onSave: (options: AssignmentOptions) => void;
 }) {
+  const [users, setUsers] = useState<SystemUser[]>([]);
+  const [serviceCatalog, setServiceCatalog] = useState<ServiceCatalog>(
+    defaultServiceCatalog
+  );
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(
+    defaultBusinessSettings
+  );
+  const [notificationSettings, setNotificationSettings] =
+    useState<NotificationSettings>(defaultNotificationSettings);
+  const [systemLoading, setSystemLoading] = useState(true);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    role: "staff" as SystemRole,
+  });
   const [roomInputs, setRoomInputs] = useState<Record<RoomType, string>>({
     standard: "",
     deluxe: "",
@@ -1092,6 +1311,64 @@ function SettingsPanel({
   });
   const [groomingStations, setGroomingStations] = useState("");
   const [groomingTimes, setGroomingTimes] = useState("");
+  const [shiftInput, setShiftInput] = useState("");
+  const [closedDateInput, setClosedDateInput] = useState("");
+  const [channelInput, setChannelInput] = useState("");
+
+  async function loadSystemSettings() {
+    try {
+      setSystemLoading(true);
+      const [usersData, catalogData, businessData, notificationData] =
+        await Promise.all([
+          api("/admin/system/users"),
+          api("/admin/system/service-catalog"),
+          api("/admin/system/business-settings"),
+          api("/admin/system/notification-settings"),
+        ]);
+
+      setUsers(usersData.users || []);
+      setServiceCatalog({
+        roomPrices: catalogData.roomPrices || defaultServiceCatalog.roomPrices,
+        groomingPrices:
+          catalogData.groomingPrices || defaultServiceCatalog.groomingPrices,
+      });
+      setBusinessSettings({
+        weekdayHours:
+          businessData.weekdayHours || defaultBusinessSettings.weekdayHours,
+        weekendHours:
+          businessData.weekendHours || defaultBusinessSettings.weekendHours,
+        shifts: businessData.shifts || defaultBusinessSettings.shifts,
+        closedDates: businessData.closedDates || [],
+      });
+      setNotificationSettings({
+        bookingReminderHours:
+          notificationData.bookingReminderHours ??
+          defaultNotificationSettings.bookingReminderHours,
+        paymentReminderHours:
+          notificationData.paymentReminderHours ??
+          defaultNotificationSettings.paymentReminderHours,
+        careLogNotifyCustomer:
+          notificationData.careLogNotifyCustomer ??
+          defaultNotificationSettings.careLogNotifyCustomer,
+        channels: notificationData.channels || defaultNotificationSettings.channels,
+        staffReminderText:
+          notificationData.staffReminderText ||
+          defaultNotificationSettings.staffReminderText,
+      });
+      setShiftInput(listToInput(businessData.shifts || []));
+      setClosedDateInput(listToInput(businessData.closedDates || []));
+      setChannelInput(listToInput(notificationData.channels || []));
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "系統設定讀取失敗");
+    } finally {
+      setSystemLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadSystemSettings();
+  }, []);
 
   useEffect(() => {
     setRoomInputs({
@@ -1103,7 +1380,7 @@ function SettingsPanel({
     setGroomingTimes(listToInput(options.groomingTimes));
   }, [options]);
 
-  const submit = () => {
+  const saveAssignments = () => {
     onSave({
       roomSpots: {
         standard: inputToList(roomInputs.standard),
@@ -1115,51 +1392,349 @@ function SettingsPanel({
     });
   };
 
+  async function createSystemUser() {
+    if (!newUser.name || !newUser.email || !newUser.phone || !newUser.password) {
+      toast.error("請填寫員工帳號資料");
+      return;
+    }
+
+    try {
+      setSavingSection("users");
+      await api("/admin/system/users", {
+        method: "POST",
+        body: JSON.stringify(newUser),
+      });
+      setNewUser({
+        name: "",
+        email: "",
+        phone: "",
+        password: "",
+        role: "staff",
+      });
+      await loadSystemSettings();
+      toast.success("員工帳號已新增");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "員工帳號新增失敗");
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function updateSystemUser(user: SystemUser) {
+    try {
+      setSavingSection(`user-${user.id}`);
+      await api(`/admin/system/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(user),
+      });
+      await loadSystemSettings();
+      toast.success("員工帳號已更新");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "員工帳號更新失敗");
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function deleteSystemUser(user: SystemUser) {
+    try {
+      setSavingSection(`user-${user.id}`);
+      await api(`/admin/system/users/${user.id}`, { method: "DELETE" });
+      await loadSystemSettings();
+      toast.success("員工帳號已刪除");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "員工帳號刪除失敗");
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function saveServiceCatalog() {
+    try {
+      setSavingSection("catalog");
+      const data = await api("/admin/system/service-catalog", {
+        method: "PATCH",
+        body: JSON.stringify(serviceCatalog),
+      });
+      setServiceCatalog({
+        roomPrices: data.roomPrices,
+        groomingPrices: data.groomingPrices,
+      });
+      toast.success("服務價格已更新");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "服務價格更新失敗");
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function saveBusinessSettings() {
+    try {
+      setSavingSection("business");
+      const data = await api("/admin/system/business-settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...businessSettings,
+          shifts: inputToList(shiftInput),
+          closedDates: inputToList(closedDateInput),
+        }),
+      });
+      setBusinessSettings(data);
+      setShiftInput(listToInput(data.shifts || []));
+      setClosedDateInput(listToInput(data.closedDates || []));
+      toast.success("營業與班表設定已更新");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "營業設定更新失敗");
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function saveNotificationSettings() {
+    try {
+      setSavingSection("notification");
+      const data = await api("/admin/system/notification-settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...notificationSettings,
+          channels: inputToList(channelInput),
+        }),
+      });
+      setNotificationSettings(data);
+      setChannelInput(listToInput(data.channels || []));
+      toast.success("通知設定已更新");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "通知設定更新失敗");
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <h2 className="text-2xl text-[#202124]">系統管理員設定</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          管理店務帳號、服務價格、營業班表、通知規則與可安排資源。這些設定只開放系統管理員修改。
+        </p>
+      </div>
+
+      {systemLoading ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-500">
+          正在讀取系統設定...
+        </div>
+      ) : null}
+
+      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
         <div>
-          <h2 className="text-2xl text-[#202124]">營運設定</h2>
+          <h3 className="text-xl text-[#202124]">員工帳號與權限</h3>
           <p className="mt-1 text-sm text-gray-500">
-            管理可安排的住宿房位、美容台與美容時段，後台安排會即時套用這些選項。
+          店務人員可處理訂單；美容師與照護師可查看工作排程、紀錄服務並通知家長；系統管理員可額外編輯營運設定。
           </p>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-5">
+          <input
+            value={newUser.name}
+            onChange={(event) =>
+              setNewUser((current) => ({ ...current, name: event.target.value }))
+            }
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+            placeholder="姓名"
+          />
+          <input
+            value={newUser.email}
+            onChange={(event) =>
+              setNewUser((current) => ({ ...current, email: event.target.value }))
+            }
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+            placeholder="Email"
+          />
+          <input
+            value={newUser.phone}
+            onChange={(event) =>
+              setNewUser((current) => ({ ...current, phone: event.target.value }))
+            }
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+            placeholder="電話"
+          />
+          <input
+            value={newUser.password}
+            onChange={(event) =>
+              setNewUser((current) => ({
+                ...current,
+                password: event.target.value,
+              }))
+            }
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+            placeholder="初始密碼"
+            type="password"
+          />
+          <select
+            value={newUser.role}
+            onChange={(event) =>
+              setNewUser((current) => ({
+                ...current,
+                role: event.target.value as SystemRole,
+              }))
+            }
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+          >
+            {Object.entries(systemRoleNames).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button
           type="button"
-          disabled={saving}
-          onClick={submit}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white hover:bg-[#34373b] disabled:opacity-60"
+          disabled={savingSection === "users"}
+          onClick={createSystemUser}
+          className="mt-3 rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white disabled:opacity-60"
         >
-          <Save className="h-4 w-4" />
-          {saving ? "儲存中..." : "儲存設定"}
+          新增員工帳號
         </button>
-      </div>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        {roomTypes.map((roomType) => (
-          <label
-            key={roomType}
-            className="block rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-          >
-            <span className="text-sm text-gray-500">{roomNames[roomType]}</span>
-            <textarea
-              value={roomInputs[roomType]}
-              onChange={(event) =>
-                setRoomInputs((current) => ({
-                  ...current,
-                  [roomType]: event.target.value,
-                }))
-              }
-              rows={7}
-              className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
-              placeholder="S-01, S-02, S-03"
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              可用逗號或換行分隔，每個代碼代表一個可安排位置。
+        <div className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
+          {users.map((user) => (
+            <div key={user.id} className="grid gap-3 p-3 lg:grid-cols-[1fr_1fr_150px_auto] lg:items-center">
+              <div>
+                <p className="text-sm text-[#202124]">{user.name}</p>
+                <p className="text-xs text-gray-500">{user.email}</p>
+              </div>
+              <input
+                value={user.phone}
+                onChange={(event) =>
+                  setUsers((current) =>
+                    current.map((item) =>
+                      item.id === user.id
+                        ? { ...item, phone: event.target.value }
+                        : item
+                    )
+                  )
+                }
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+              />
+              <select
+                value={user.role}
+                onChange={(event) =>
+                  setUsers((current) =>
+                    current.map((item) =>
+                      item.id === user.id
+                        ? {
+                            ...item,
+                            role: event.target.value as SystemRole,
+                          }
+                        : item
+                    )
+                  )
+                }
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+              >
+                {Object.entries(systemRoleNames).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateSystemUser(user)}
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  儲存
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteSystemUser(user)}
+                  className="rounded-lg border border-[#b85c68] px-3 py-2 text-sm text-[#b85c68] hover:bg-[#fff0f0]"
+                >
+                  刪除
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h3 className="text-xl text-[#202124]">房間、設施與價格</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              設定住宿房型價格、美容服務價格，以及可安排的房位、美容台與時段。
             </p>
-          </label>
-        ))}
+          </div>
+          <button
+            type="button"
+            disabled={savingSection === "catalog"}
+            onClick={saveServiceCatalog}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white hover:bg-[#34373b] disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            儲存價格
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <PriceEditor
+            title="住宿房型價格"
+            names={roomNames}
+            values={serviceCatalog.roomPrices}
+            onChange={(key, value) =>
+              setServiceCatalog((current) => ({
+                ...current,
+                roomPrices: { ...current.roomPrices, [key]: value },
+              }))
+            }
+          />
+          <PriceEditor
+            title="美容服務價格"
+            names={groomingNames}
+            values={serviceCatalog.groomingPrices}
+            onChange={(key, value) =>
+              setServiceCatalog((current) => ({
+                ...current,
+                groomingPrices: { ...current.groomingPrices, [key]: value },
+              }))
+            }
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={saveAssignments}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#202124] px-4 py-2.5 text-sm text-[#202124] hover:bg-gray-50 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? "儲存中..." : "儲存位置與時段"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          {roomTypes.map((roomType) => (
+            <label key={roomType} className="block rounded-lg border border-gray-200 p-4">
+              <span className="text-sm text-gray-500">{roomNames[roomType]}</span>
+              <textarea
+                value={roomInputs[roomType]}
+                onChange={(event) =>
+                  setRoomInputs((current) => ({
+                    ...current,
+                    [roomType]: event.target.value,
+                  }))
+                }
+                rows={6}
+                className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+                placeholder="S-01, S-02, S-03"
+              />
+            </label>
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -1185,7 +1760,202 @@ function SettingsPanel({
           />
         </label>
       </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 className="text-xl text-[#202124]">營業時間與排班</h3>
+          <div className="mt-4 grid gap-3">
+            <SettingInput
+              label="平日營業時間"
+              value={businessSettings.weekdayHours}
+              onChange={(value) =>
+                setBusinessSettings((current) => ({
+                  ...current,
+                  weekdayHours: value,
+                }))
+              }
+            />
+            <SettingInput
+              label="假日營業時間"
+              value={businessSettings.weekendHours}
+              onChange={(value) =>
+                setBusinessSettings((current) => ({
+                  ...current,
+                  weekendHours: value,
+                }))
+              }
+            />
+            <SettingTextarea
+              label="班表班次"
+              value={shiftInput}
+              onChange={setShiftInput}
+              placeholder="早班 09:00-15:00&#10;晚班 15:00-21:00"
+            />
+            <SettingTextarea
+              label="休假日"
+              value={closedDateInput}
+              onChange={setClosedDateInput}
+              placeholder="2026-06-01&#10;2026-06-02"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={savingSection === "business"}
+            onClick={saveBusinessSettings}
+            className="mt-4 rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white disabled:opacity-60"
+          >
+            儲存營業設定
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 className="text-xl text-[#202124]">系統通知與提醒</h3>
+          <div className="mt-4 grid gap-3">
+            <SettingInput
+              label="預約前提醒客戶（小時）"
+              type="number"
+              value={String(notificationSettings.bookingReminderHours)}
+              onChange={(value) =>
+                setNotificationSettings((current) => ({
+                  ...current,
+                  bookingReminderHours: Number(value),
+                }))
+              }
+            />
+            <SettingInput
+              label="付款提醒（小時）"
+              type="number"
+              value={String(notificationSettings.paymentReminderHours)}
+              onChange={(value) =>
+                setNotificationSettings((current) => ({
+                  ...current,
+                  paymentReminderHours: Number(value),
+                }))
+              }
+            />
+            <label className="flex items-center gap-2 rounded-lg bg-[#f7f8fa] px-3 py-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={notificationSettings.careLogNotifyCustomer}
+                onChange={(event) =>
+                  setNotificationSettings((current) => ({
+                    ...current,
+                    careLogNotifyCustomer: event.target.checked,
+                  }))
+                }
+              />
+              新增公開照護紀錄時提醒客戶
+            </label>
+            <SettingTextarea
+              label="通知方式"
+              value={channelInput}
+              onChange={setChannelInput}
+              placeholder="站內通知&#10;Email"
+            />
+            <SettingTextarea
+              label="店務提醒文字"
+              value={notificationSettings.staffReminderText}
+              onChange={(value) =>
+                setNotificationSettings((current) => ({
+                  ...current,
+                  staffReminderText: value,
+                }))
+              }
+              placeholder="請確認今日入住、退房、美容與待收款項目。"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={savingSection === "notification"}
+            onClick={saveNotificationSettings}
+            className="mt-4 rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white disabled:opacity-60"
+          >
+            儲存通知設定
+          </button>
+        </div>
+      </section>
     </div>
+  );
+}
+
+function PriceEditor<T extends string>({
+  title,
+  names,
+  values,
+  onChange,
+}: {
+  title: string;
+  names: Record<T, string>;
+  values: Record<T, number>;
+  onChange: (key: T, value: number) => void;
+}) {
+  return (
+    <div className="rounded-lg bg-[#f7f8fa] p-4">
+      <h4 className="text-sm text-[#202124]">{title}</h4>
+      <div className="mt-3 space-y-3">
+        {Object.entries(names).map(([key, label]) => (
+          <label key={key} className="grid grid-cols-[1fr_130px] items-center gap-3 text-sm">
+            <span className="text-gray-600">{String(label)}</span>
+            <input
+              type="number"
+              min={0}
+              value={values[key as T]}
+              onChange={(event) => onChange(key as T, Number(event.target.value))}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-gray-500">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+      />
+    </label>
+  );
+}
+
+function SettingTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-gray-500">{label}</span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={4}
+        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+        placeholder={placeholder}
+      />
+    </label>
   );
 }
 
@@ -1747,7 +2517,7 @@ function MiniStat({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: number;
+  value: number | string;
 }) {
   return (
     <div className="rounded-lg border border-gray-200 p-3">
@@ -2297,7 +3067,7 @@ function AuditLogPanel({ logs }: { logs: AuditLog[] }) {
 
       <div className="space-y-3">
         {logs.length === 0 ? (
-          <EmptyNote text="目前還沒有後台操作紀錄" />
+          <EmptyNote text="目前還沒有店務操作紀錄" />
         ) : (
           logs.slice(0, 8).map((log) => (
             <div key={log.id} className="rounded-lg bg-[#f7f8fa] p-3">
@@ -2493,12 +3263,18 @@ function assignmentSummary(order: Order) {
     return `${order.assignedSpot} / ${order.scheduledTime}`;
   }
 
+  if (order.scheduledTime) {
+    return `美容時段 ${order.scheduledTime}，尚未安排美容台`;
+  }
+
   return "尚未安排美容台";
 }
 
 function assignmentHint(order: Order) {
   return order.serviceType === "accommodation"
     ? "請指定住宿房位"
+    : order.scheduledTime
+    ? "請指定美容台"
     : "請指定美容台與時段";
 }
 
