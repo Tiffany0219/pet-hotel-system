@@ -145,6 +145,21 @@ type NotificationSettings = {
   staffReminderText: string;
 };
 
+type ChartItem = {
+  label: string;
+  value: number;
+  color: string;
+  helper?: string;
+};
+
+type DashboardCharts = {
+  status: ChartItem[];
+  service: ChartItem[];
+  payment: ChartItem[];
+  roomOccupancy: ChartItem[];
+  recentOrders: ChartItem[];
+};
+
 const statusOptions = ["待確認", "已確認", "進行中", "已完成", "已取消"];
 const paymentStatusOptions = ["未付款", "已付訂金", "已付款"];
 const paymentMethodOptions = ["未設定", "現金", "轉帳", "信用卡", "線上付款", "現場付款", "其他"];
@@ -645,6 +660,67 @@ export default function AdminDashboard() {
     };
   }, [sortedOrders]);
 
+  const dashboardCharts = useMemo<DashboardCharts>(() => {
+    const statusColors: Record<string, string> = {
+      待確認: "#b87868",
+      已確認: "#6f9fc2",
+      進行中: "#6b3a2a",
+      已完成: "#5f8a5f",
+      已取消: "#b85c68",
+    };
+    const baseDate = businessDate ? parseDateKey(businessDate) : new Date();
+
+    return {
+      status: statusOptions.map((status) => ({
+        label: status,
+        value: statusCounts[status] || 0,
+        color: statusColors[status] || "#9ca3af",
+      })),
+      service: [
+        {
+          label: "住宿",
+          value: serviceCounts.accommodation,
+          color: "#6b3a2a",
+        },
+        {
+          label: "美容",
+          value: serviceCounts.grooming,
+          color: "#b87868",
+        },
+      ],
+      payment: paymentStatusOptions.map((status, index) => ({
+        label: status,
+        value: sortedOrders.filter((order) => order.paymentStatus === status).length,
+        color: ["#b87868", "#c8a15f", "#5f8a5f"][index] || "#9ca3af",
+      })),
+      roomOccupancy: roomTypes.map((roomType) => {
+        const room = stats?.rooms[roomType];
+        const value = room?.capacity
+          ? Math.round((room.booked / room.capacity) * 100)
+          : 0;
+
+        return {
+          label: roomNames[roomType],
+          value,
+          color: value >= 80 ? "#b85c68" : value >= 50 ? "#c8a15f" : "#5f8a5f",
+          helper: `${room?.booked || 0} / ${room?.capacity || 0}`,
+        };
+      }),
+      recentOrders: Array.from({ length: 7 }).map((_, index) => {
+        const date = new Date(baseDate);
+        date.setDate(baseDate.getDate() - (6 - index));
+        const dateKey = formatDateKey(date);
+
+        return {
+          label: `${date.getMonth() + 1}/${date.getDate()}`,
+          value: sortedOrders.filter((order) => order.startDate === dateKey).length,
+          color: "#6f9fc2",
+          helper: dateKey,
+        };
+      }),
+    };
+  }, [businessDate, serviceCounts, sortedOrders, stats?.rooms, statusCounts]);
+
   const filteredOrders = useMemo(() => {
     const keyword = query.trim().toLowerCase();
 
@@ -788,6 +864,7 @@ export default function AdminDashboard() {
             statusCounts={statusCounts}
             serviceCounts={serviceCounts}
             reportMetrics={reportMetrics}
+            dashboardCharts={dashboardCharts}
             updatingId={updatingId}
             onSelectOrder={setSelectedOrderId}
             onUpdateStatus={updateStatus}
@@ -863,6 +940,7 @@ function TodayWorkspace({
   statusCounts,
   serviceCounts,
   reportMetrics,
+  dashboardCharts,
   updatingId,
   onSelectOrder,
   onUpdateStatus,
@@ -894,6 +972,7 @@ function TodayWorkspace({
     groomingWorkload: number;
     careWorkload: number;
   };
+  dashboardCharts: DashboardCharts;
   updatingId: string | null;
   onSelectOrder: (id: string) => void;
   onUpdateStatus: (id: string, status: string) => void;
@@ -989,6 +1068,45 @@ function TodayWorkspace({
           helper="全部房型合計"
           tone="rose"
         />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <ChartPanel
+          title="訂單狀態分布"
+          caption="所有訂單目前所在狀態"
+        >
+          <HorizontalBarChart data={dashboardCharts.status} />
+        </ChartPanel>
+
+        <ChartPanel
+          title="服務類型比例"
+          caption="住宿與美容預約占比"
+        >
+          <DonutChart data={dashboardCharts.service} centerLabel="服務" />
+        </ChartPanel>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <ChartPanel
+          title="近 7 天預約量"
+          caption="依預約日期統計"
+        >
+          <MiniColumnChart data={dashboardCharts.recentOrders} />
+        </ChartPanel>
+
+        <ChartPanel
+          title="房型使用率"
+          caption="今日各房型入住壓力"
+        >
+          <HorizontalBarChart data={dashboardCharts.roomOccupancy} suffix="%" />
+        </ChartPanel>
+
+        <ChartPanel
+          title="付款狀態"
+          caption="未付款、訂金與已付款"
+        >
+          <DonutChart data={dashboardCharts.payment} centerLabel="付款" />
+        </ChartPanel>
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -2476,6 +2594,139 @@ function HeroMetric({
   );
 }
 
+function ChartPanel({
+  title,
+  caption,
+  children,
+}: {
+  title: string;
+  caption: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg text-[#202124]">{title}</h2>
+          <p className="mt-1 text-sm text-gray-500">{caption}</p>
+        </div>
+        <BarChart3 className="h-5 w-5 text-[#6f9fc2]" />
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function HorizontalBarChart({
+  data,
+  suffix = "",
+}: {
+  data: ChartItem[];
+  suffix?: string;
+}) {
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+
+  return (
+    <div className="space-y-3">
+      {data.map((item) => {
+        const width = Math.max(4, Math.round((item.value / maxValue) * 100));
+        return (
+          <div key={item.label}>
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-gray-600">{item.label}</span>
+              <span className="text-[#202124]">
+                {item.value}
+                {suffix}
+                {item.helper ? ` (${item.helper})` : ""}
+              </span>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${width}%`, backgroundColor: item.color }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DonutChart({
+  data,
+  centerLabel,
+}: {
+  data: ChartItem[];
+  centerLabel: string;
+}) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let cursor = 0;
+  const gradient =
+    total === 0
+      ? "#e5e7eb 0deg 360deg"
+      : data
+          .map((item) => {
+            const start = cursor;
+            const end = cursor + (item.value / total) * 360;
+            cursor = end;
+            return `${item.color} ${start}deg ${end}deg`;
+          })
+          .join(", ");
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center">
+      <div
+        className="relative mx-auto h-36 w-36 rounded-full"
+        style={{ background: `conic-gradient(${gradient})` }}
+      >
+        <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white text-center">
+          <span className="text-xs text-gray-500">{centerLabel}</span>
+          <span className="text-2xl text-[#202124]">{total}</span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {data.map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-3 text-sm">
+            <span className="flex items-center gap-2 text-gray-600">
+              <span
+                className="h-3 w-3 rounded-full"
+                style={{ backgroundColor: item.color }}
+              />
+              {item.label}
+            </span>
+            <span className="text-[#202124]">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MiniColumnChart({ data }: { data: ChartItem[] }) {
+  const maxValue = Math.max(...data.map((item) => item.value), 1);
+
+  return (
+    <div className="flex h-44 items-end gap-2 rounded-lg bg-[#fbfcfd] px-3 py-4">
+      {data.map((item) => {
+        const height = Math.max(8, Math.round((item.value / maxValue) * 120));
+        return (
+          <div key={item.helper || item.label} className="flex flex-1 flex-col items-center gap-2">
+            <div className="text-xs text-gray-500">{item.value}</div>
+            <div
+              className="w-full max-w-9 rounded-t-lg"
+              style={{ height: `${height}px`, backgroundColor: item.color }}
+              title={item.helper}
+            />
+            <div className="text-xs text-gray-500">{item.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MetricCard({
   icon,
   label,
@@ -3280,6 +3531,18 @@ function assignmentHint(order: Order) {
 
 function listToInput(values: string[]) {
   return values.join("\n");
+}
+
+function parseDateKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function inputToList(value: string) {
