@@ -15,9 +15,9 @@ import {
   MessageSquare,
   RefreshCcw,
   ChevronDown,
+  Image,
 } from "lucide-react";
 import { toast } from "sonner";
-import ConfirmDialog from "../components/ConfirmDialog";
 import { API_BASE } from "../config";
 
 interface Order {
@@ -34,6 +34,7 @@ interface Order {
   scheduledTime?: string | null;
   assignmentNote?: string;
   careLogs?: CareLog[];
+  cancelReason?: string;
   total: number;
   status: string;
   paymentStatus: string;
@@ -52,6 +53,7 @@ interface CareLog {
   authorName: string;
   logType: string;
   message: string;
+  photoUrl?: string;
   visibleToCustomer: boolean;
   createdAt: string;
 }
@@ -66,6 +68,7 @@ export default function Orders() {
 
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
   const [payOrderId, setPayOrderId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("線上付款");
   const [canceling, setCanceling] = useState(false);
@@ -169,8 +172,10 @@ export default function Orders() {
       const response = await fetch(`${API_BASE}/orders/${orderId}/cancel`, {
         method: "PATCH",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ cancelReason }),
       });
 
       const data = await response.json();
@@ -182,6 +187,7 @@ export default function Orders() {
 
       toast.success("已取消預約");
       setCancelOrderId(null);
+      setCancelReason("");
       fetchOrders();
     } catch (error) {
       console.error(error);
@@ -399,6 +405,7 @@ export default function Orders() {
                     paymentClass={getPaymentBadge(order.paymentStatus)}
                     onPay={setPayOrderId}
                     onCancel={setCancelOrderId}
+                    onDetail={(id) => navigate(`/orders/${id}`)}
                     showActions
                   />
                 ))}
@@ -429,6 +436,7 @@ export default function Orders() {
                       title={getOrderTitle(order)}
                       statusClass={getStatusBadge(order.status)}
                       onReview={() => setReviewOrderId(order.id)}
+                      onDetail={() => navigate(`/orders/${order.id}`)}
                     />
                   ))}
                 </div>
@@ -455,6 +463,7 @@ export default function Orders() {
                       order={order}
                       title={getOrderTitle(order)}
                       statusClass={getStatusBadge(order.status)}
+                      onDetail={() => navigate(`/orders/${order.id}`)}
                     />
                   ))}
                 </div>
@@ -480,24 +489,19 @@ export default function Orders() {
         />
       )}
 
-      <ConfirmDialog
-        open={Boolean(cancelOrder)}
-        title="取消這筆預約？"
-        description={
-          cancelOrder
-            ? `訂單 #${cancelOrder.id} 取消後會保留紀錄，但無法再從會員端恢復。`
-            : ""
-        }
-        confirmText="取消預約"
-        tone="danger"
-        loading={canceling}
-        onCancel={() => setCancelOrderId(null)}
-        onConfirm={() => {
-          if (cancelOrder) {
-            handleCancel(cancelOrder.id);
-          }
-        }}
-      />
+      {cancelOrder && (
+        <CancelOrderModal
+          order={cancelOrder}
+          reason={cancelReason}
+          loading={canceling}
+          onReasonChange={setCancelReason}
+          onCancel={() => {
+            setCancelOrderId(null);
+            setCancelReason("");
+          }}
+          onConfirm={() => handleCancel(cancelOrder.id)}
+        />
+      )}
 
       {payOrder && (
         <PaymentModal
@@ -519,6 +523,7 @@ function OrderCard({
   paymentClass,
   onPay,
   onCancel,
+  onDetail,
   showActions,
 }: {
   order: Order;
@@ -527,6 +532,7 @@ function OrderCard({
   paymentClass: string;
   onPay: (id: string) => void;
   onCancel: (id: string) => void;
+  onDetail: (id: string) => void;
   showActions?: boolean;
 }) {
   return (
@@ -643,6 +649,9 @@ function OrderCard({
                   <p className="text-sm leading-relaxed text-gray-700">
                     {log.message}
                   </p>
+                  {log.photoUrl && (
+                    <CareLogPhoto photoUrl={log.photoUrl} />
+                  )}
                 </div>
               ))}
             </div>
@@ -670,6 +679,13 @@ function OrderCard({
                 取消預約
               </button>
             )}
+
+            <button
+              onClick={() => onDetail(order.id)}
+              className="px-5 py-2.5 rounded-full border border-[#6b3a2a] text-[#6b3a2a] hover:bg-[#fdf6f0] transition-all"
+            >
+              查看詳情
+            </button>
           </div>
         )}
       </div>
@@ -682,11 +698,13 @@ function MiniOrderCard({
   title,
   statusClass,
   onReview,
+  onDetail,
 }: {
   order: Order;
   title: string;
   statusClass: string;
   onReview?: () => void;
+  onDetail?: () => void;
 }) {
   return (
     <div className="rounded-2xl bg-white border border-[#f0e6df] p-4 shadow-sm">
@@ -724,6 +742,11 @@ function MiniOrderCard({
       <p className="mt-1 text-xs text-gray-500">
         付款：{paymentSummary(order)}
       </p>
+      {order.cancelReason && (
+        <p className="mt-1 text-xs text-[#b87868]">
+          取消原因：{order.cancelReason}
+        </p>
+      )}
 
       {order.status === "已完成" && (
         <div className="mt-3">
@@ -746,6 +769,16 @@ function MiniOrderCard({
             </button>
           )}
         </div>
+      )}
+
+      {onDetail && (
+        <button
+          type="button"
+          onClick={onDetail}
+          className="mt-3 w-full rounded-full border border-[#6b3a2a] py-2 text-sm text-[#6b3a2a] hover:bg-[#fdf6f0]"
+        >
+          查看詳情
+        </button>
       )}
     </div>
   );
@@ -941,6 +974,82 @@ function ReviewModal({
   );
 }
 
+function CancelOrderModal({
+  order,
+  reason,
+  loading,
+  onReasonChange,
+  onCancel,
+  onConfirm,
+}: {
+  order: Order;
+  reason: string;
+  loading: boolean;
+  onReasonChange: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const reasons = ["臨時有事", "時間不方便", "價格考量", "寵物狀況不適合", "其他"];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-[#f0e6df]">
+        <div className="text-center mb-6">
+          <X className="w-10 h-10 text-[#b87868] mx-auto mb-3" />
+          <h2 className="text-2xl text-[#3d1a0d]">取消這筆預約？</h2>
+          <p className="text-sm text-gray-500 mt-2">
+            訂單 #{order.id} 取消後會保留紀錄，請選擇取消原因。
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          {reasons.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onReasonChange(item)}
+              className={`rounded-2xl border px-4 py-3 text-left text-sm ${
+                reason === item
+                  ? "border-[#b87868] bg-[#fff5f2] text-[#8b5040]"
+                  : "border-[#eadfd8] text-gray-600 hover:bg-[#faf7f4]"
+              }`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={reason}
+          onChange={(event) => onReasonChange(event.target.value)}
+          rows={3}
+          className="mt-4 w-full rounded-2xl border border-[#eadfd8] px-4 py-3 text-sm outline-none"
+          placeholder="也可以自行輸入取消原因"
+        />
+
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onCancel}
+            className="flex-1 py-3 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+          >
+            返回
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onConfirm}
+            className="flex-1 py-3 rounded-full bg-[#b87868] text-white hover:bg-[#a66657] disabled:opacity-60"
+          >
+            {loading ? "取消中..." : "確認取消"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PaymentModal({
   order,
   paymentMethod,
@@ -1005,6 +1114,31 @@ function PaymentModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CareLogPhoto({ photoUrl }: { photoUrl: string }) {
+  const isInlineImage = photoUrl.startsWith("data:image/");
+
+  return (
+    <div className="mt-3">
+      {isInlineImage && (
+        <img
+          src={photoUrl}
+          alt="服務照片"
+          className="mb-2 h-36 w-full rounded-2xl object-cover"
+        />
+      )}
+      <a
+        href={photoUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-2 rounded-full bg-[#faf7f4] px-3 py-1.5 text-xs text-[#6b3a2a] hover:bg-[#f3e4d7]"
+      >
+        <Image className="h-3.5 w-3.5" />
+        查看照片
+      </a>
     </div>
   );
 }

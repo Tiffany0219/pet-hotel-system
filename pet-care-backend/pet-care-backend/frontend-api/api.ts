@@ -14,6 +14,13 @@ export type SystemUserPayload = {
   role: "staff" | "groomer" | "caregiver" | "admin";
 };
 
+export type StaffShiftPayload = {
+  userId: string;
+  workDate: string;
+  shiftLabel: string;
+  note?: string;
+};
+
 export function getToken() {
   return localStorage.getItem("token");
 }
@@ -92,15 +99,18 @@ export const petApi = {
 export const orderApi = {
   list: () => request("/orders"),
 
+  get: (id: string) => request(`/orders/${id}`),
+
   create: (payload: any) =>
     request("/orders", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  cancel: (id: string) =>
+  cancel: (id: string, payload: { cancelReason?: string } = {}) =>
     request(`/orders/${id}/cancel`, {
       method: "PATCH",
+      body: JSON.stringify(payload),
     }),
 
   pay: (id: string, payload: { paymentMethod: string }) =>
@@ -135,6 +145,20 @@ export const adminApi = {
   stats: () => request("/admin/stats"),
 
   orders: () => request("/admin/orders"),
+
+  staffShifts: (startDate: string, endDate: string) =>
+    request(`/admin/staff-shifts?startDate=${startDate}&endDate=${endDate}`),
+
+  createStaffShift: (payload: StaffShiftPayload) =>
+    request("/admin/staff-shifts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteStaffShift: (id: string) =>
+    request(`/admin/staff-shifts/${id}`, {
+      method: "DELETE",
+    }),
 
   systemUsers: () => request("/admin/system/users"),
 
@@ -179,6 +203,8 @@ export const adminApi = {
       body: JSON.stringify(payload),
     }),
 
+  backup: () => request("/admin/system/backup"),
+
   assignmentOptions: () => request("/admin/assignments/options"),
 
   updateAssignmentOptions: (payload: AssignmentOptions) =>
@@ -210,7 +236,7 @@ export const adminApi = {
     id: string,
     payload: {
       paymentStatus: "未付款" | "已付訂金" | "已付款";
-      paymentMethod: "未設定" | "現金" | "轉帳" | "信用卡" | "線上付款" | "其他";
+      paymentMethod: "未設定" | "現金" | "轉帳" | "信用卡" | "線上付款" | "現場付款" | "其他";
       paidAmount: number;
     }
   ) =>
@@ -228,12 +254,29 @@ export const adminApi = {
     payload: {
       logType: string;
       message: string;
+      photoUrl?: string;
       visibleToCustomer: boolean;
     }
   ) =>
     request(`/admin/orders/${id}/care-logs`, {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+};
+
+export const staffApi = {
+  attendanceToday: () => request("/staff/attendance/today"),
+
+  clockIn: () =>
+    request("/staff/attendance/clock-in", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  clockOut: () =>
+    request("/staff/attendance/clock-out", {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
 };
 
@@ -251,6 +294,7 @@ export const workerApi = {
     payload: {
       logType: string;
       message: string;
+      photoUrl?: string;
       visibleToCustomer: boolean;
     }
   ) =>

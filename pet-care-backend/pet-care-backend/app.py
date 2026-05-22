@@ -1,10 +1,12 @@
 import json
 import os
+import csv
+import io
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import jwt
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -21,6 +23,8 @@ CORS(
                 "http://127.0.0.1:5173",
                 "http://localhost:5174",
                 "http://127.0.0.1:5174",
+                "http://localhost:5181",
+                "http://127.0.0.1:5181",
             ],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
@@ -112,6 +116,7 @@ class Order(db.Model):
     assigned_spot = db.Column(db.String(40), nullable=True)
     scheduled_time = db.Column(db.String(20), nullable=True)
     assignment_note = db.Column(db.Text, default="")
+    cancel_reason = db.Column(db.String(120), default="")
 
     total = db.Column(db.Integer, nullable=False)
 
@@ -119,6 +124,8 @@ class Order(db.Model):
     payment_status = db.Column(db.String(20), default="未付款")
     payment_method = db.Column(db.String(30), default="")
     paid_amount = db.Column(db.Integer, default=0)
+    receipt_no = db.Column(db.String(40), default="")
+    paid_at = db.Column(db.DateTime, nullable=True)
 
     notes = db.Column(db.Text, default="")
     rating = db.Column(db.Integer, nullable=True)
@@ -149,6 +156,7 @@ class CareLog(db.Model):
 
     log_type = db.Column(db.String(30), nullable=False)
     message = db.Column(db.Text, nullable=False)
+    photo_url = db.Column(db.String(255), default="")
     visible_to_customer = db.Column(db.Boolean, default=True)
 
     created_at = db.Column(db.DateTime, default=now_local)
@@ -196,6 +204,40 @@ class AppSetting(db.Model):
         default=now_local,
         onupdate=now_local,
     )
+
+
+class StaffShift(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    work_date = db.Column(db.String(20), nullable=False)
+    shift_label = db.Column(db.String(80), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
+    note = db.Column(db.Text, default="")
+
+    created_at = db.Column(db.DateTime, default=now_local)
+
+    user = db.relationship("User", lazy=True)
+
+
+class StaffAttendance(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    work_date = db.Column(db.String(20), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
+    clock_in_at = db.Column(db.DateTime, nullable=True)
+    clock_out_at = db.Column(db.DateTime, nullable=True)
+    note = db.Column(db.Text, default="")
+
+    created_at = db.Column(db.DateTime, default=now_local)
+    updated_at = db.Column(
+        db.DateTime,
+        default=now_local,
+        onupdate=now_local,
+    )
+
+    user = db.relationship("User", lazy=True)
 
 
 # =========================
@@ -308,6 +350,7 @@ def care_log_to_dict(log: CareLog):
         "authorName": log.author.name if log.author else "系統",
         "logType": log.log_type,
         "message": log.message,
+        "photoUrl": log.photo_url or "",
         "visibleToCustomer": log.visible_to_customer,
         "createdAt": log.created_at.isoformat(),
     }
@@ -370,12 +413,15 @@ def order_to_dict(order: Order, include_internal_logs: bool = False):
         "assignedSpot": order.assigned_spot,
         "scheduledTime": order.scheduled_time,
         "assignmentNote": order.assignment_note or "",
+        "cancelReason": order.cancel_reason or "",
         "total": order.total,
         "status": order.status,
         "paymentStatus": order.payment_status,
         "paymentMethod": order.payment_method or "",
         "paidAmount": paid_amount,
         "balanceDue": balance_due,
+        "receiptNo": order.receipt_no or "",
+        "paidAt": order.paid_at.isoformat() if order.paid_at else None,
         "notes": order.notes or "",
         "rating": order.rating,
         "review": order.review,
@@ -392,6 +438,65 @@ def order_to_dict(order: Order, include_internal_logs: bool = False):
         result["auditLogs"] = [audit_log_to_dict(log) for log in audit_logs]
 
     return result
+
+
+def staff_shift_to_dict(shift: StaffShift):
+    return {
+        "id": str(shift.id),
+        "userId": str(shift.user_id),
+        "userName": shift.user.name if shift.user else "",
+        "userEmail": shift.user.email if shift.user else "",
+        "workDate": shift.work_date,
+        "shiftLabel": shift.shift_label,
+        "role": shift.role,
+        "roleLabel": role_label(shift.role),
+        "note": shift.note or "",
+        "createdAt": shift.created_at.isoformat(),
+    }
+
+
+def staff_attendance_to_dict(attendance: StaffAttendance | None):
+    if not attendance:
+        return None
+
+    worked_minutes = 0
+    if attendance.clock_in_at:
+        end_at = attendance.clock_out_at or now_local()
+        worked_minutes = max(0, int((end_at - attendance.clock_in_at).total_seconds() // 60))
+
+    return {
+        "id": str(attendance.id),
+        "userId": str(attendance.user_id),
+        "userName": attendance.user.name if attendance.user else "",
+        "workDate": attendance.work_date,
+        "role": attendance.role,
+        "roleLabel": role_label(attendance.role),
+        "clockInAt": attendance.clock_in_at.isoformat() if attendance.clock_in_at else None,
+        "clockOutAt": attendance.clock_out_at.isoformat() if attendance.clock_out_at else None,
+        "workedMinutes": worked_minutes,
+        "note": attendance.note or "",
+        "createdAt": attendance.created_at.isoformat(),
+        "updatedAt": attendance.updated_at.isoformat(),
+    }
+
+
+def member_to_dict(user: User):
+    member_orders = sorted(
+        user.orders,
+        key=lambda order: order.created_at,
+        reverse=True,
+    )
+
+    return {
+        **user_to_dict(user),
+        "pets": [pet_to_dict(pet) for pet in user.pets],
+        "orders": [
+            order_to_dict(order, include_internal_logs=True)
+            for order in member_orders[:8]
+        ],
+        "orderCount": len(user.orders),
+        "petCount": len(user.pets),
+    }
 
 
 def normalize_string_list(value):
@@ -717,6 +822,18 @@ def worker_required(fn):
     return wrapper
 
 
+def staff_user_required(fn):
+    @auth_required
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if request.current_user.role not in WORKER_ROLES:
+            return jsonify({"message": "需要員工權限"}), 403
+
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
 def system_admin_required(fn):
     @auth_required
     @wraps(fn)
@@ -740,6 +857,16 @@ def worker_can_access_order(user: User, order: Order):
         return order.service_type == "accommodation"
 
     return False
+
+
+def get_today_attendance(user: User):
+    work_date = now_local().date().isoformat()
+    attendance = StaffAttendance.query.filter_by(
+        user_id=user.id,
+        work_date=work_date,
+    ).first()
+
+    return attendance
 
 
 def order_matches_work_date(order: Order, target_date: str):
@@ -794,6 +921,14 @@ def create_customer_notification(
         title=title,
         message=message,
     ))
+
+
+def generate_receipt_no(order: Order):
+    if order.receipt_no:
+        return order.receipt_no
+
+    date_key = now_local().strftime("%Y%m%d")
+    return f"RC-{date_key}-{order.id:04d}"
 
 
 def notify_customer_for_care_log(order: Order, log_type: str, message: str):
@@ -1257,6 +1392,21 @@ def get_orders():
     })
 
 
+@app.get("/api/orders/<int:order_id>")
+@auth_required
+def get_order(order_id):
+    order = (
+        Order.query
+        .filter_by(id=order_id, user_id=request.current_user.id)
+        .first()
+    )
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    return jsonify({"order": order_to_dict(order)})
+
+
 @app.post("/api/orders")
 @auth_required
 def create_order():
@@ -1360,8 +1510,16 @@ def cancel_order(order_id):
     if not can_cancel:
         return jsonify({"message": message}), 400
 
+    data = request.get_json() or {}
+    cancel_reason = str(data.get("cancelReason", "") or "").strip()
     order.status = "已取消"
-    create_audit_log("客戶取消預約", "客戶自行取消預約", order)
+    order.cancel_reason = cancel_reason
+    create_audit_log(
+        "客戶取消預約",
+        f"客戶自行取消預約"
+        + (f"，原因：{cancel_reason}" if cancel_reason else ""),
+        order,
+    )
     db.session.commit()
 
     return jsonify({
@@ -1395,9 +1553,17 @@ def pay_order(order_id):
     order.payment_status = "已付款"
     order.payment_method = payment_method
     order.paid_amount = order.total
+    order.receipt_no = generate_receipt_no(order)
+    order.paid_at = now_local()
+    create_customer_notification(
+        order,
+        "付款成功",
+        f"{payment_method} NT$ {order.total}，收據編號 {order.receipt_no}",
+        "payment",
+    )
     create_audit_log(
         "客戶付款",
-        f"{payment_method} NT$ {order.total}",
+        f"{payment_method} NT$ {order.total} / 收據 {order.receipt_no}",
         order,
     )
     db.session.commit()
@@ -1426,6 +1592,13 @@ def update_order_status(order_id):
 
     previous_status = order.status
     order.status = next_status
+    if previous_status != next_status:
+        create_customer_notification(
+            order,
+            "預約狀態更新",
+            f"訂單 #{order.id} 狀態已由「{previous_status}」更新為「{next_status}」。",
+            "status",
+        )
     create_audit_log(
         "更新狀態",
         f"狀態由「{previous_status}」改為「{next_status}」",
@@ -1543,6 +1716,24 @@ def mark_all_notifications_read():
     })
 
 
+def csv_download(filename: str, rows: list[dict]):
+    output = io.StringIO()
+    fieldnames = list(rows[0].keys()) if rows else ["message"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+
+    if rows:
+        writer.writerows(rows)
+    else:
+        writer.writerow({"message": "沒有資料"})
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # =========================
 # Admin APIs
 # =========================
@@ -1593,6 +1784,90 @@ def admin_stats():
     })
 
 
+@app.get("/api/admin/export/orders.csv")
+@admin_required
+def admin_export_orders_csv():
+    orders = Order.query.order_by(Order.created_at.desc()).all()
+    rows = [
+        {
+            "訂單編號": order.id,
+            "會員": order.user.name if order.user else "",
+            "Email": order.user.email if order.user else "",
+            "電話": order.user.phone if order.user else "",
+            "寵物": order.pet.name if order.pet else "",
+            "服務類型": "住宿" if order.service_type == "accommodation" else "美容",
+            "服務項目": (
+                order.room_type if order.service_type == "accommodation"
+                else order.grooming_service
+            ),
+            "日期": f"{order.start_date} - {order.end_date or order.start_date}",
+            "位置": order.assigned_spot or "",
+            "時段": order.scheduled_time or "",
+            "狀態": order.status,
+            "取消原因": order.cancel_reason or "",
+            "付款狀態": order.payment_status,
+            "付款方式": order.payment_method or "",
+            "已收金額": order.paid_amount or 0,
+            "收據編號": order.receipt_no or "",
+            "付款時間": order.paid_at.isoformat() if order.paid_at else "",
+            "總金額": order.total,
+            "建立時間": order.created_at.isoformat(),
+        }
+        for order in orders
+    ]
+
+    return csv_download("pet-care-orders.csv", rows)
+
+
+@app.get("/api/admin/export/members.csv")
+@admin_required
+def admin_export_members_csv():
+    users = User.query.order_by(User.created_at.desc()).all()
+    rows = [
+        {
+            "會員編號": user.id,
+            "姓名": user.name,
+            "Email": user.email,
+            "電話": user.phone,
+            "角色": role_label(user.role),
+            "寵物數": len(user.pets),
+            "訂單數": len(user.orders),
+            "建立時間": user.created_at.isoformat(),
+        }
+        for user in users
+    ]
+
+    return csv_download("pet-care-members.csv", rows)
+
+
+@app.get("/api/admin/export/revenue.csv")
+@admin_required
+def admin_export_revenue_csv():
+    paid_orders = (
+        Order.query
+        .filter(Order.status != "已取消")
+        .filter(Order.paid_amount > 0)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+    rows = [
+        {
+            "訂單編號": order.id,
+            "付款狀態": order.payment_status,
+            "付款方式": order.payment_method or "",
+            "已收金額": order.paid_amount or 0,
+            "收據編號": order.receipt_no or "",
+            "總金額": order.total,
+            "服務類型": "住宿" if order.service_type == "accommodation" else "美容",
+            "會員": order.user.name if order.user else "",
+            "付款日期": (order.paid_at or order.created_at).isoformat(),
+        }
+        for order in paid_orders
+    ]
+
+    return csv_download("pet-care-revenue.csv", rows)
+
+
 @app.get("/api/admin/orders")
 @admin_required
 def admin_get_orders():
@@ -1609,6 +1884,178 @@ def admin_get_orders():
             for order in orders
         ]
     })
+
+
+@app.get("/api/admin/members")
+@admin_required
+def admin_get_members():
+    keyword = str(request.args.get("query", "") or "").strip().lower()
+    members = (
+        User.query
+        .filter_by(role="member")
+        .order_by(User.created_at.desc())
+        .all()
+    )
+
+    if keyword:
+        members = [
+            member for member in members
+            if keyword in " ".join([
+                member.name,
+                member.email,
+                member.phone,
+                " ".join(pet.name for pet in member.pets),
+            ]).lower()
+        ]
+
+    return jsonify({
+        "members": [member_to_dict(member) for member in members[:80]]
+    })
+
+
+@app.post("/api/admin/orders")
+@admin_required
+def admin_create_order():
+    data = request.get_json() or {}
+    member_data = data.get("member") or {}
+    pet_data = data.get("pet") or {}
+    user_id = data.get("userId")
+    pet_id = data.get("petId")
+
+    if user_id:
+        user = db.session.get(User, int(user_id))
+        if not user or user.role != "member":
+            return jsonify({"message": "找不到會員資料"}), 404
+    else:
+        name = str(member_data.get("name", "") or "").strip()
+        phone = str(member_data.get("phone", "") or "").strip()
+        email = str(member_data.get("email", "") or "").strip().lower()
+
+        if not name or not phone:
+            return jsonify({"message": "請填寫會員姓名與電話"}), 400
+
+        if not email:
+            digits = "".join(ch for ch in phone if ch.isdigit()) or str(int(now_local().timestamp()))
+            email = f"walkin-{digits}@petcare.local"
+
+        user = User.query.filter_by(email=email).first()
+        if user and user.role != "member":
+            return jsonify({"message": "此 Email 已被員工帳號使用"}), 409
+
+        if not user:
+            user = User(
+                email=email,
+                password_hash=generate_password_hash("petcare123"),
+                name=name,
+                phone=phone,
+                role="member",
+            )
+            db.session.add(user)
+            db.session.flush()
+            create_audit_log("櫃檯建立會員", f"建立現場會員 {name}")
+
+    if pet_id:
+        pet = Pet.query.filter_by(id=int(pet_id), user_id=user.id).first()
+        if not pet:
+            return jsonify({"message": "找不到寵物資料"}), 404
+    else:
+        pet_name = str(pet_data.get("name", "") or "").strip()
+        species = str(pet_data.get("species", "") or "").strip()
+        breed = str(pet_data.get("breed", "") or "").strip() or "未提供"
+        gender = str(pet_data.get("gender", "") or "").strip() or "未提供"
+
+        if not pet_name or not species:
+            return jsonify({"message": "請填寫寵物姓名與種類"}), 400
+
+        try:
+            age = int(pet_data.get("age", 0) or 0)
+            weight = float(pet_data.get("weight", 0) or 0)
+        except (TypeError, ValueError):
+            return jsonify({"message": "寵物年齡與體重格式不正確"}), 400
+
+        pet = Pet(
+            user_id=user.id,
+            name=pet_name,
+            species=species,
+            breed=breed,
+            age=max(0, age),
+            weight=max(0, weight),
+            gender=gender,
+            notes=str(pet_data.get("notes", "") or "").strip(),
+            image_url=pet_data.get("imageUrl") or default_pet_image(species),
+        )
+        db.session.add(pet)
+        db.session.flush()
+        create_audit_log("櫃檯建立寵物", f"替 {user.name} 建立寵物資料 {pet.name}")
+
+    try:
+        total = calculate_total(data)
+    except ValueError as exc:
+        return jsonify({"message": str(exc)}), 400
+
+    service_type = data.get("serviceType")
+    if service_type == "accommodation":
+        is_available, full_date = check_room_available_for_range(
+            data.get("roomType", "standard"),
+            data.get("startDate"),
+            data.get("endDate"),
+        )
+        if not is_available:
+            return jsonify({"message": f"{full_date} 此房型已額滿"}), 400
+    elif service_type == "grooming":
+        is_available, message = check_grooming_time_available(
+            data.get("startDate"),
+            str(data.get("scheduledTime", "") or "").strip(),
+        )
+        if not is_available:
+            return jsonify({"message": message}), 400
+    else:
+        return jsonify({"message": "服務類型不存在"}), 400
+
+    order = Order(
+        user_id=user.id,
+        pet_id=pet.id,
+        service_type=service_type,
+        room_type=data.get("roomType"),
+        grooming_service=data.get("groomingService"),
+        start_date=data.get("startDate"),
+        end_date=data.get("endDate") if service_type == "accommodation" else None,
+        scheduled_time=data.get("scheduledTime") if service_type == "grooming" else None,
+        total=total,
+        status=data.get("status") if data.get("status") in ["待確認", "已確認"] else "已確認",
+        payment_status="未付款",
+        payment_method="",
+        paid_amount=0,
+        notes=str(data.get("notes", "") or "").strip(),
+    )
+
+    db.session.add(order)
+    db.session.flush()
+
+    assigned_spot = str(data.get("assignedSpot", "") or "").strip()
+    if assigned_spot:
+        try:
+            assigned_spot, scheduled_time = validate_order_assignment(
+                order,
+                assigned_spot,
+                data.get("scheduledTime", "") if service_type == "grooming" else "",
+            )
+        except ValueError as exc:
+            db.session.rollback()
+            return jsonify({"message": str(exc)}), 400
+
+        order.assigned_spot = assigned_spot or None
+        order.scheduled_time = scheduled_time or order.scheduled_time
+
+    order.assignment_note = str(data.get("assignmentNote", "") or "").strip()
+    create_audit_log("櫃檯建立預約", f"替 {user.name} 建立預約", order)
+    db.session.commit()
+
+    return jsonify({
+        "message": "櫃檯預約已建立",
+        "order": order_to_dict(order, include_internal_logs=True),
+        "member": member_to_dict(user),
+    }), 201
 
 
 @app.get("/api/admin/system/users")
@@ -1711,6 +2158,101 @@ def admin_delete_system_user(user_id):
     return jsonify({"message": "員工帳號已刪除"})
 
 
+@app.get("/api/admin/staff-shifts")
+@admin_required
+def admin_staff_shifts():
+    today = now_local().date()
+    start_date = request.args.get("startDate") or today.isoformat()
+    end_date = request.args.get("endDate") or (today + timedelta(days=14)).isoformat()
+
+    shifts = (
+        StaffShift.query
+        .filter(StaffShift.work_date >= start_date)
+        .filter(StaffShift.work_date <= end_date)
+        .order_by(StaffShift.work_date.asc(), StaffShift.shift_label.asc())
+        .all()
+    )
+
+    staff_users = (
+        User.query
+        .filter(User.role.in_(SYSTEM_USER_ROLES))
+        .order_by(User.role.asc(), User.name.asc())
+        .all()
+    )
+
+    return jsonify({
+        "shifts": [staff_shift_to_dict(shift) for shift in shifts],
+        "users": [user_to_dict(user) for user in staff_users],
+    })
+
+
+@app.post("/api/admin/staff-shifts")
+@system_admin_required
+def admin_create_staff_shift():
+    data = request.get_json() or {}
+
+    try:
+        user_id = int(data.get("userId"))
+    except (TypeError, ValueError):
+        return jsonify({"message": "請選擇員工"}), 400
+
+    user = db.session.get(User, user_id)
+    if not user or user.role not in SYSTEM_USER_ROLES:
+        return jsonify({"message": "找不到員工帳號"}), 404
+
+    work_date = str(data.get("workDate", "") or "").strip()
+    shift_label = str(data.get("shiftLabel", "") or "").strip()
+    note = str(data.get("note", "") or "").strip()
+
+    if not work_date or not shift_label:
+        return jsonify({"message": "請填寫排班日期與班別"}), 400
+
+    try:
+        datetime.fromisoformat(work_date)
+    except ValueError:
+        return jsonify({"message": "排班日期格式不正確"}), 400
+
+    duplicate = (
+        StaffShift.query
+        .filter_by(user_id=user.id, work_date=work_date, shift_label=shift_label)
+        .first()
+    )
+    if duplicate:
+        return jsonify({"message": "此員工該班別已排班"}), 409
+
+    shift = StaffShift(
+        user_id=user.id,
+        work_date=work_date,
+        shift_label=shift_label,
+        role=user.role,
+        note=note,
+    )
+    db.session.add(shift)
+    create_audit_log("新增員工排班", f"{work_date} {shift_label}：{user.name}")
+    db.session.commit()
+
+    return jsonify({
+        "message": "排班已新增",
+        "shift": staff_shift_to_dict(shift),
+    }), 201
+
+
+@app.delete("/api/admin/staff-shifts/<int:shift_id>")
+@system_admin_required
+def admin_delete_staff_shift(shift_id):
+    shift = db.session.get(StaffShift, shift_id)
+
+    if not shift:
+        return jsonify({"message": "找不到排班"}), 404
+
+    label = f"{shift.work_date} {shift.shift_label}：{shift.user.name if shift.user else ''}"
+    db.session.delete(shift)
+    create_audit_log("刪除員工排班", label)
+    db.session.commit()
+
+    return jsonify({"message": "排班已刪除"})
+
+
 @app.get("/api/admin/system/service-catalog")
 @admin_required
 def admin_get_service_catalog():
@@ -1772,12 +2314,116 @@ def admin_update_notification_settings():
     })
 
 
+@app.get("/api/admin/system/backup")
+@system_admin_required
+def admin_system_backup():
+    return jsonify({
+        "generatedAt": now_local().isoformat(),
+        "users": [user_to_dict(user) for user in User.query.all()],
+        "pets": [pet_to_dict(pet) for pet in Pet.query.all()],
+        "orders": [
+            order_to_dict(order, include_internal_logs=True)
+            for order in Order.query.all()
+        ],
+        "staffShifts": [
+            staff_shift_to_dict(shift)
+            for shift in StaffShift.query.order_by(StaffShift.work_date.desc()).all()
+        ],
+        "staffAttendances": [
+            staff_attendance_to_dict(attendance)
+            for attendance in StaffAttendance.query.order_by(StaffAttendance.work_date.desc()).all()
+        ],
+        "settings": {
+            "assignmentOptions": get_assignment_options(),
+            "serviceCatalog": get_service_catalog(),
+            "businessSettings": get_business_settings(),
+            "notificationSettings": get_notification_settings(),
+        },
+    })
+
+
 @app.get("/api/public/system-settings")
 def public_system_settings():
     return jsonify({
         "serviceCatalog": get_service_catalog(),
         "businessSettings": get_business_settings(),
         "notificationSettings": get_notification_settings(),
+    })
+
+
+@app.get("/api/staff/attendance/today")
+@staff_user_required
+def staff_today_attendance():
+    attendance = get_today_attendance(request.current_user)
+
+    return jsonify({
+        "date": now_local().date().isoformat(),
+        "attendance": staff_attendance_to_dict(attendance),
+    })
+
+
+@app.post("/api/staff/attendance/clock-in")
+@staff_user_required
+def staff_clock_in():
+    user = request.current_user
+    attendance = get_today_attendance(user)
+
+    if attendance and attendance.clock_in_at:
+        return jsonify({
+            "message": "今天已經上班打卡",
+            "attendance": staff_attendance_to_dict(attendance),
+        }), 400
+
+    if not attendance:
+        attendance = StaffAttendance(
+            user_id=user.id,
+            work_date=now_local().date().isoformat(),
+            role=user.role,
+        )
+        db.session.add(attendance)
+
+    data = request.get_json() or {}
+    attendance.clock_in_at = now_local()
+    attendance.note = str(data.get("note", attendance.note or "") or "").strip()
+    create_audit_log(
+        "員工上班打卡",
+        f"{user.name}（{role_label(user.role)}）上班打卡",
+    )
+    db.session.commit()
+
+    return jsonify({
+        "message": "上班打卡成功",
+        "attendance": staff_attendance_to_dict(attendance),
+    })
+
+
+@app.post("/api/staff/attendance/clock-out")
+@staff_user_required
+def staff_clock_out():
+    user = request.current_user
+    attendance = get_today_attendance(user)
+
+    if not attendance or not attendance.clock_in_at:
+        return jsonify({"message": "請先完成上班打卡"}), 400
+
+    if attendance.clock_out_at:
+        return jsonify({
+            "message": "今天已經下班打卡",
+            "attendance": staff_attendance_to_dict(attendance),
+        }), 400
+
+    data = request.get_json() or {}
+    attendance.clock_out_at = now_local()
+    attendance.note = str(data.get("note", attendance.note or "") or "").strip()
+    create_audit_log(
+        "員工下班打卡",
+        f"{user.name}（{role_label(user.role)}）下班打卡",
+    )
+    db.session.commit()
+
+    return jsonify({
+        "message": "下班打卡成功",
+        "attendance": staff_attendance_to_dict(attendance),
     })
 
 
@@ -1817,6 +2463,13 @@ def admin_update_order_status(order_id):
 
     previous_status = order.status
     order.status = next_status
+    if previous_status != next_status:
+        create_customer_notification(
+            order,
+            "預約狀態更新",
+            f"訂單 #{order.id} 狀態已由「{previous_status}」更新為「{next_status}」。",
+            "status",
+        )
     create_audit_log(
         "更新狀態",
         f"狀態由「{previous_status}」改為「{next_status}」",
@@ -1925,19 +2578,159 @@ def admin_update_order_payment(order_id):
     order.payment_status = payment_status
     order.payment_method = "" if payment_method == "未設定" else payment_method
     order.paid_amount = paid_amount
+
+    if paid_amount > 0:
+        order.receipt_no = generate_receipt_no(order)
+        order.paid_at = now_local()
+    else:
+        order.receipt_no = ""
+        order.paid_at = None
+
     next_payment = (
         f"{order.payment_status} / {order.payment_method or '未設定'} / "
         f"NT$ {order.paid_amount or 0}"
     )
     create_audit_log(
         "更新付款",
-        f"付款由「{previous_payment}」改為「{next_payment}」",
+        f"付款由「{previous_payment}」改為「{next_payment}」"
+        + (f" / 收據 {order.receipt_no}" if order.receipt_no else ""),
+        order,
+    )
+
+    if paid_amount > 0:
+        create_customer_notification(
+            order,
+            "付款資料已更新",
+            f"訂單 #{order.id} 已收 NT$ {paid_amount}，收據編號 {order.receipt_no}",
+            "payment",
+        )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "付款資料已更新",
+        "order": order_to_dict(order, include_internal_logs=True)
+    })
+
+
+@app.patch("/api/admin/orders/<int:order_id>/check-in")
+@admin_required
+def admin_check_in_order(order_id):
+    order = db.session.get(Order, order_id)
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    if order.service_type != "accommodation":
+        return jsonify({"message": "只有住宿訂單可以辦理入住"}), 400
+
+    if not order.assigned_spot:
+        return jsonify({"message": "請先安排房位再辦理入住"}), 400
+
+    previous_status = order.status
+    order.status = "進行中"
+    create_customer_notification(
+        order,
+        "毛孩已入住",
+        f"訂單 #{order.id} 已完成入住，房位 {order.assigned_spot}。",
+        "status",
+    )
+    create_audit_log(
+        "辦理入住",
+        f"櫃檯辦理入住，狀態由「{previous_status}」改為「進行中」",
         order,
     )
     db.session.commit()
 
     return jsonify({
-        "message": "付款資料已更新",
+        "message": "入住已辦理",
+        "order": order_to_dict(order, include_internal_logs=True)
+    })
+
+
+@app.patch("/api/admin/orders/<int:order_id>/check-out")
+@admin_required
+def admin_check_out_order(order_id):
+    order = db.session.get(Order, order_id)
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    if order.service_type != "accommodation":
+        return jsonify({"message": "只有住宿訂單可以辦理退房"}), 400
+
+    if order.payment_status != "已付款":
+        return jsonify({"message": "請先確認尾款已結清"}), 400
+
+    previous_status = order.status
+    order.status = "已完成"
+    create_customer_notification(
+        order,
+        "訂單已完成",
+        f"訂單 #{order.id} 已完成退房，感謝您的使用。",
+        "status",
+    )
+    create_audit_log(
+        "辦理退房",
+        f"櫃檯辦理退房，狀態由「{previous_status}」改為「已完成」",
+        order,
+    )
+    db.session.commit()
+
+    return jsonify({
+        "message": "退房已辦理",
+        "order": order_to_dict(order, include_internal_logs=True)
+    })
+
+
+@app.post("/api/admin/orders/<int:order_id>/contact-logs")
+@admin_required
+def admin_create_contact_log(order_id):
+    order = db.session.get(Order, order_id)
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    data = request.get_json() or {}
+    channel = str(data.get("channel", "電話") or "電話").strip()
+    result = str(data.get("result", "已聯絡") or "已聯絡").strip()
+    note = str(data.get("note", "") or "").strip()
+
+    if not note:
+        return jsonify({"message": "請輸入聯絡內容"}), 400
+
+    create_audit_log(
+        "聯絡紀錄",
+        f"{channel} / {result}：{note}",
+        order,
+    )
+    db.session.commit()
+
+    return jsonify({
+        "message": "聯絡紀錄已新增",
+        "order": order_to_dict(order, include_internal_logs=True)
+    })
+
+
+@app.post("/api/admin/orders/<int:order_id>/handover-notes")
+@admin_required
+def admin_create_handover_note(order_id):
+    order = db.session.get(Order, order_id)
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    data = request.get_json() or {}
+    note = str(data.get("note", "") or "").strip()
+
+    if not note:
+        return jsonify({"message": "請輸入交班備註"}), 400
+
+    create_audit_log("交班備註", note, order)
+    db.session.commit()
+
+    return jsonify({
+        "message": "交班備註已新增",
         "order": order_to_dict(order, include_internal_logs=True)
     })
 
@@ -1991,8 +2784,9 @@ def admin_create_care_log(order_id):
         return jsonify({"message": "找不到訂單"}), 404
 
     data = request.get_json() or {}
-    log_type = data.get("logType", "照護").strip()
-    message = data.get("message", "").strip()
+    log_type = str(data.get("logType", "照護") or "照護").strip()
+    message = str(data.get("message", "") or "").strip()
+    photo_url = str(data.get("photoUrl", "") or "").strip()
     visible_to_customer = bool(data.get("visibleToCustomer", True))
 
     if not message:
@@ -2003,6 +2797,7 @@ def admin_create_care_log(order_id):
         author_id=request.current_user.id,
         log_type=log_type or "照護",
         message=message,
+        photo_url=photo_url,
         visible_to_customer=visible_to_customer,
     )
 
@@ -2048,10 +2843,17 @@ def worker_schedule():
         if worker_can_access_order(user, order)
         and order_matches_work_date(order, target_date)
     ]
+    shifts = (
+        StaffShift.query
+        .filter_by(user_id=user.id, work_date=target_date)
+        .order_by(StaffShift.shift_label.asc())
+        .all()
+    )
 
     return jsonify({
         "date": target_date,
         "role": user.role,
+        "shifts": [staff_shift_to_dict(shift) for shift in shifts],
         "orders": visible_orders,
     })
 
@@ -2076,6 +2878,13 @@ def worker_update_order_status(order_id):
 
     previous_status = order.status
     order.status = next_status
+    if previous_status != next_status:
+        create_customer_notification(
+            order,
+            "服務狀態更新",
+            f"訂單 #{order.id} 服務狀態已由「{previous_status}」更新為「{next_status}」。",
+            "status",
+        )
     create_audit_log(
         "工作人員更新狀態",
         f"{role_label(request.current_user.role)}將狀態由「{previous_status}」改為「{next_status}」",
@@ -2101,8 +2910,9 @@ def worker_create_care_log(order_id):
         return jsonify({"message": "無法操作此訂單"}), 403
 
     data = request.get_json() or {}
-    log_type = data.get("logType", "照護").strip() or "照護"
-    message = data.get("message", "").strip()
+    log_type = str(data.get("logType", "照護") or "照護").strip() or "照護"
+    message = str(data.get("message", "") or "").strip()
+    photo_url = str(data.get("photoUrl", "") or "").strip()
     is_abnormal = log_type == "異常"
     visible_to_customer = True if is_abnormal else bool(
         data.get("visibleToCustomer", True)
@@ -2116,6 +2926,7 @@ def worker_create_care_log(order_id):
         author_id=request.current_user.id,
         log_type=log_type,
         message=message,
+        photo_url=photo_url,
         visible_to_customer=visible_to_customer,
     )
 
@@ -2300,6 +3111,223 @@ def seed_worker_user(email: str, password: str, name: str, phone: str, role: str
     db.session.commit()
 
 
+def ensure_demo_member(email: str, name: str, phone: str, pet_data: dict):
+    member = User.query.filter_by(email=email).first()
+
+    if not member:
+        member = User(
+            email=email,
+            password_hash=generate_password_hash("member123"),
+            name=name,
+            phone=phone,
+            role="member",
+        )
+        db.session.add(member)
+        db.session.flush()
+
+    pet = next((item for item in member.pets if item.name == pet_data["name"]), None)
+    if not pet:
+        pet = Pet(
+            user_id=member.id,
+            name=pet_data["name"],
+            species=pet_data["species"],
+            breed=pet_data["breed"],
+            age=pet_data["age"],
+            weight=pet_data["weight"],
+            gender=pet_data["gender"],
+            notes=pet_data.get("notes", ""),
+            image_url=pet_data.get("image_url", default_pet_image(pet_data["species"])),
+        )
+        db.session.add(pet)
+        db.session.flush()
+
+    return member, pet
+
+
+def ensure_demo_order(member: User, pet: Pet, data: dict):
+    existing = (
+        Order.query
+        .filter_by(user_id=member.id, pet_id=pet.id, start_date=data["start_date"])
+        .filter_by(service_type=data["service_type"])
+        .first()
+    )
+
+    if existing:
+        return existing
+
+    order = Order(
+        user_id=member.id,
+        pet_id=pet.id,
+        service_type=data["service_type"],
+        room_type=data.get("room_type"),
+        grooming_service=data.get("grooming_service"),
+        start_date=data["start_date"],
+        end_date=data.get("end_date"),
+        assigned_spot=data.get("assigned_spot"),
+        scheduled_time=data.get("scheduled_time"),
+        assignment_note=data.get("assignment_note", ""),
+        total=data["total"],
+        status=data.get("status", "已確認"),
+        payment_status=data.get("payment_status", "未付款"),
+        payment_method=data.get("payment_method", ""),
+        paid_amount=data.get("paid_amount", 0),
+        receipt_no=data.get("receipt_no", ""),
+        paid_at=data.get("paid_at"),
+        notes=data.get("notes", ""),
+    )
+
+    if order.paid_amount > 0:
+        db.session.add(order)
+        db.session.flush()
+        order.receipt_no = order.receipt_no or generate_receipt_no(order)
+        order.paid_at = order.paid_at or now_local()
+    else:
+        db.session.add(order)
+
+    db.session.flush()
+    return order
+
+
+def seed_demo_dataset():
+    today = now_local().date()
+    members = [
+        (
+            "tiffany.member@test.com",
+            "Tiffany",
+            "0912-345-678",
+            {
+                "name": "Momo",
+                "species": "狗",
+                "breed": "貴賓",
+                "age": 4,
+                "weight": 5.2,
+                "gender": "母",
+                "notes": "腸胃較敏感，晚餐請少量多餐。",
+            },
+        ),
+        (
+            "lin.member@test.com",
+            "林小姐",
+            "0922-111-888",
+            {
+                "name": "布丁",
+                "species": "貓",
+                "breed": "英國短毛貓",
+                "age": 2,
+                "weight": 4.1,
+                "gender": "公",
+                "notes": "不喜歡陌生人抱，照護時慢慢接近。",
+            },
+        ),
+        (
+            "chen.member@test.com",
+            "陳先生",
+            "0933-222-777",
+            {
+                "name": "阿福",
+                "species": "狗",
+                "breed": "柴犬",
+                "age": 5,
+                "weight": 10.3,
+                "gender": "公",
+                "notes": "需要每日散步兩次。",
+            },
+        ),
+    ]
+
+    demo_members = [ensure_demo_member(*member) for member in members]
+    db.session.commit()
+
+    sample_orders = [
+        (0, {
+            "service_type": "accommodation",
+            "room_type": "standard",
+            "start_date": today.isoformat(),
+            "end_date": (today + timedelta(days=2)).isoformat(),
+            "assigned_spot": "S-01",
+            "total": 1600,
+            "status": "已確認",
+            "payment_status": "已付訂金",
+            "payment_method": "轉帳",
+            "paid_amount": 800,
+            "notes": "晚餐自備飼料，櫃檯已收。",
+        }),
+        (1, {
+            "service_type": "grooming",
+            "grooming_service": "styling",
+            "start_date": today.isoformat(),
+            "scheduled_time": "14:30",
+            "assigned_spot": "G-01",
+            "total": 1200,
+            "status": "待確認",
+            "payment_status": "未付款",
+            "notes": "第一次到店，需先介紹流程。",
+        }),
+        (2, {
+            "service_type": "accommodation",
+            "room_type": "vip",
+            "start_date": (today + timedelta(days=1)).isoformat(),
+            "end_date": (today + timedelta(days=4)).isoformat(),
+            "assigned_spot": "V-01",
+            "total": 6000,
+            "status": "已確認",
+            "payment_status": "已付款",
+            "payment_method": "信用卡",
+            "paid_amount": 6000,
+            "notes": "需要獨立活動時間。",
+        }),
+        (0, {
+            "service_type": "grooming",
+            "grooming_service": "spa",
+            "start_date": (today + timedelta(days=3)).isoformat(),
+            "scheduled_time": "10:30",
+            "assigned_spot": "G-02",
+            "total": 1800,
+            "status": "已確認",
+            "payment_status": "未付款",
+            "notes": "SPA 後拍照回傳家長。",
+        }),
+    ]
+
+    for member_index, order_data in sample_orders:
+        member, pet = demo_members[member_index]
+        ensure_demo_order(member, pet, order_data)
+
+    staff_by_email = {
+        user.email: user
+        for user in User.query.filter(User.role.in_(SYSTEM_USER_ROLES)).all()
+    }
+    shift_rows = [
+        ("staff@test.com", today.isoformat(), "早班 09:00-15:00", "今日入住與退房櫃檯"),
+        ("groomer@test.com", today.isoformat(), "早班 09:00-15:00", "美容台 G-01、G-02"),
+        ("caregiver@test.com", today.isoformat(), "晚班 15:00-21:00", "住宿巡房與晚餐照護"),
+        ("staff@test.com", (today + timedelta(days=1)).isoformat(), "晚班 15:00-21:00", "電話確認隔日預約"),
+    ]
+
+    for email, work_date, shift_label, note in shift_rows:
+        staff = staff_by_email.get(email)
+        if not staff:
+            continue
+
+        exists = (
+            StaffShift.query
+            .filter_by(user_id=staff.id, work_date=work_date, shift_label=shift_label)
+            .first()
+        )
+        if exists:
+            continue
+
+        db.session.add(StaffShift(
+            user_id=staff.id,
+            work_date=work_date,
+            shift_label=shift_label,
+            role=staff.role,
+            note=note,
+        ))
+
+    db.session.commit()
+
+
 def ensure_order_assignment_columns():
     existing_columns = {
         row[1]
@@ -2310,8 +3338,11 @@ def ensure_order_assignment_columns():
         "assigned_spot": 'ALTER TABLE "order" ADD COLUMN assigned_spot VARCHAR(40)',
         "scheduled_time": 'ALTER TABLE "order" ADD COLUMN scheduled_time VARCHAR(20)',
         "assignment_note": 'ALTER TABLE "order" ADD COLUMN assignment_note TEXT DEFAULT ""',
+        "cancel_reason": 'ALTER TABLE "order" ADD COLUMN cancel_reason VARCHAR(120) DEFAULT ""',
         "payment_method": 'ALTER TABLE "order" ADD COLUMN payment_method VARCHAR(30) DEFAULT ""',
         "paid_amount": 'ALTER TABLE "order" ADD COLUMN paid_amount INTEGER DEFAULT 0',
+        "receipt_no": 'ALTER TABLE "order" ADD COLUMN receipt_no VARCHAR(40) DEFAULT ""',
+        "paid_at": 'ALTER TABLE "order" ADD COLUMN paid_at DATETIME',
     }
 
     for column, statement in migrations.items():
@@ -2332,12 +3363,33 @@ def ensure_order_assignment_columns():
         'AND (payment_method IS NULL OR payment_method = "")'
     ))
 
+    db.session.execute(db.text(
+        'UPDATE "order" '
+        'SET receipt_no = "RC-" || replace(start_date, "-", "") || "-" || printf("%04d", id) '
+        'WHERE paid_amount > 0 '
+        'AND (receipt_no IS NULL OR receipt_no = "")'
+    ))
+
     db.session.commit()
+
+
+def ensure_care_log_photo_column():
+    existing_columns = {
+        row[1]
+        for row in db.session.execute(db.text('PRAGMA table_info("care_log")'))
+    }
+
+    if "photo_url" not in existing_columns:
+        db.session.execute(
+            db.text('ALTER TABLE "care_log" ADD COLUMN photo_url VARCHAR(255) DEFAULT ""')
+        )
+        db.session.commit()
 
 
 with app.app_context():
     db.create_all()
     ensure_order_assignment_columns()
+    ensure_care_log_photo_column()
     seed_demo_user()
     seed_staff_user()
     seed_worker_user(
@@ -2355,6 +3407,7 @@ with app.app_context():
         "caregiver",
     )
     seed_admin_user()
+    seed_demo_dataset()
 
 
 if __name__ == "__main__":

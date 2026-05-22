@@ -17,6 +17,7 @@ import Dashboard from './pages/Dashboard';
 import Pets from './pages/Pets';
 import Booking from './pages/Booking';
 import Orders from './pages/Orders';
+import OrderDetail from './pages/OrderDetail';
 import Notifications from './pages/Notifications';
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/pets" element={<RequireAuth><Pets /></RequireAuth>} />
           <Route path="/booking" element={<RequireAuth><Booking /></RequireAuth>} />
           <Route path="/orders" element={<RequireAuth><Orders /></RequireAuth>} />
+          <Route path="/orders/:id" element={<RequireAuth><OrderDetail /></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
         </Route>
       </Routes>

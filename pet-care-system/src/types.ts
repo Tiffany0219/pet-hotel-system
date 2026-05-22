@@ -30,6 +30,11 @@ export interface Order {
   total: number;
   status: string;
   paymentStatus: string;
+  paymentMethod?: string;
+  paidAmount?: number;
+  balanceDue?: number;
+  receiptNo?: string;
+  paidAt?: string | null;
   createdAt: string;
   notes?: string;
   rating?: number;
