@@ -12,10 +12,15 @@ import {
   ArrowRight,
   Save,
   X,
+  Bell,
+  CreditCard,
+  MessageSquare,
+  Clock3,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "../config";
+import MemberBackButton from "../components/MemberBackButton";
 
 export default function Dashboard() {
   const { user, refreshUser } = useAuth();
@@ -27,6 +32,10 @@ export default function Dashboard() {
     name: user?.name || "",
     phone: user?.phone || "",
   });
+  const [pets, setPets] = useState<PetSummary[]>([]);
+  const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [overviewLoading, setOverviewLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -35,6 +44,51 @@ export default function Dashboard() {
         phone: user.phone || "",
       });
     }
+  }, [user]);
+
+  useEffect(() => {
+    async function loadMemberOverview() {
+      if (!user) return;
+
+      try {
+        setOverviewLoading(true);
+        const token = localStorage.getItem("token");
+        const headers = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        const [petResponse, orderResponse, notificationResponse] =
+          await Promise.all([
+            fetch(`${API_BASE}/pets`, { headers }),
+            fetch(`${API_BASE}/orders`, { headers }),
+            fetch(`${API_BASE}/notifications`, { headers }),
+          ]);
+
+        const [petData, orderData, notificationData] = await Promise.all([
+          petResponse.json(),
+          orderResponse.json(),
+          notificationResponse.json(),
+        ]);
+
+        if (petResponse.ok) {
+          setPets(petData.pets || []);
+        }
+
+        if (orderResponse.ok) {
+          setOrders(orderData.orders || []);
+        }
+
+        if (notificationResponse.ok) {
+          setUnreadCount(notificationData.unreadCount || 0);
+        }
+      } catch (error) {
+        console.error("會員摘要讀取失敗", error);
+      } finally {
+        setOverviewLoading(false);
+      }
+    }
+
+    loadMemberOverview();
   }, [user]);
 
   const quickLinks = [
@@ -63,6 +117,50 @@ export default function Dashboard() {
       iconBg: "bg-[#5f8a5f]",
     },
   ];
+
+  const today = new Date().toISOString().slice(0, 10);
+  const activeOrders = orders.filter(
+    (order) => order.status !== "已取消" && order.status !== "已完成"
+  );
+  const unpaidOrders = orders.filter(
+    (order) => order.status !== "已取消" && order.paymentStatus !== "已付款"
+  );
+  const todayOrders = activeOrders.filter((order) => {
+    if (order.serviceType === "accommodation") {
+      return order.startDate <= today && (order.endDate || order.startDate) >= today;
+    }
+
+    return order.startDate === today;
+  });
+  const nextOrder = activeOrders
+    .filter((order) => order.startDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+  const recentCareLog = orders
+    .flatMap((order) =>
+      (order.careLogs || []).map((log) => ({
+        ...log,
+        petName: order.petName,
+      }))
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0];
+  const petOrderCounts = orders.reduce<Record<string, number>>((counts, order) => {
+    if (!order.petId) return counts;
+    counts[order.petId] = (counts[order.petId] || 0) + 1;
+    return counts;
+  }, {});
+  const favoritePet = [...pets].sort(
+    (a, b) => (petOrderCounts[b.id] || 0) - (petOrderCounts[a.id] || 0)
+  )[0];
+  const lastBookableOrder = orders.find((order) => order.status !== "已取消");
+  const favoritePetBookingUrl = favoritePet
+    ? `/booking?petId=${favoritePet.id}`
+    : "/pets";
+  const repeatBookingUrl = lastBookableOrder
+    ? `/booking?petId=${lastBookableOrder.petId}&service=${lastBookableOrder.serviceType}`
+    : "/booking";
 
   const handleCancelEdit = () => {
     setProfileForm({
@@ -129,6 +227,9 @@ export default function Dashboard() {
 
         <div className="max-w-7xl mx-auto px-4 relative flex flex-col md:flex-row md:items-center md:justify-between gap-8">
           <div>
+            <div className="mb-5">
+              <MemberBackButton label="回首頁" to="/" />
+            </div>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 text-[#6b3a2a] text-sm shadow-sm mb-6">
               <Sparkles className="w-4 h-4" />
               會員中心
@@ -163,6 +264,127 @@ export default function Dashboard() {
 
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4">
+          <div className="mb-8 grid gap-4 md:grid-cols-4">
+            <SummaryCard
+              icon={<PawPrint className="h-5 w-5" />}
+              label="毛孩資料"
+              value={`${pets.length} 筆`}
+              hint={pets.length > 0 ? "可預約住宿與美容" : "先新增毛孩資料"}
+              tone="brown"
+            />
+            <SummaryCard
+              icon={<Clock3 className="h-5 w-5" />}
+              label="今日預約"
+              value={`${todayOrders.length} 筆`}
+              hint={nextOrder ? `下一筆：${nextOrder.startDate}` : "目前沒有待服務預約"}
+              tone="blue"
+            />
+            <SummaryCard
+              icon={<CreditCard className="h-5 w-5" />}
+              label="待付款"
+              value={`${unpaidOrders.length} 筆`}
+              hint={unpaidOrders.length > 0 ? "請至訂單頁完成付款" : "目前沒有待付款訂單"}
+              tone="gold"
+            />
+            <SummaryCard
+              icon={<Bell className="h-5 w-5" />}
+              label="未讀通知"
+              value={`${unreadCount} 則`}
+              hint={overviewLoading ? "同步中..." : "店家回報會顯示在右上角"}
+              tone="rose"
+            />
+          </div>
+
+          {recentCareLog && (
+            <div className="mb-8 rounded-3xl border border-[#d9eaf5] bg-[#f7fbff] p-6 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-[#6f9fc2] shadow-sm">
+                    <MessageSquare className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm text-[#6f9fc2]">最近店家回報</p>
+                    <h2 className="text-2xl text-[#3d1a0d]">
+                      {recentCareLog.petName || "毛孩"}的照護更新
+                    </h2>
+                    <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                      {recentCareLog.message}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/orders"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm text-[#6b3a2a] shadow-sm hover:bg-[#faf7f4]"
+                >
+                  查看訂單
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-8 grid gap-5 lg:grid-cols-2">
+            <div className="rounded-3xl border border-[#f0e6df] bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[#fdf0e0] text-[#6b3a2a]">
+                    <PawPrint className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#b87868]">常用毛孩</p>
+                    <h2 className="mt-1 text-2xl text-[#3d1a0d]">
+                      {favoritePet?.name || "尚未新增毛孩"}
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-500">
+                      {favoritePet
+                        ? `已有 ${petOrderCounts[favoritePet.id] || 0} 筆預約紀錄，可直接帶入預約表單。`
+                        : "先建立毛孩資料，之後預約會更快速。"}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to={favoritePetBookingUrl}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#6b3a2a] px-5 py-2.5 text-sm text-white hover:bg-[#8b5040]"
+                >
+                  {favoritePet ? "幫牠預約" : "新增毛孩"}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-[#f0e6df] bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[#f7fbff] text-[#6f9fc2]">
+                    <Calendar className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[#6f9fc2]">一鍵再次預約</p>
+                    <h2 className="mt-1 text-2xl text-[#3d1a0d]">
+                      {lastBookableOrder
+                        ? lastBookableOrder.serviceType === "accommodation"
+                          ? "再次預約住宿"
+                          : "再次預約美容"
+                        : "建立新的預約"}
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-500">
+                      {lastBookableOrder
+                        ? `會先帶入 ${lastBookableOrder.petName || "毛孩"} 與服務類型，再選日期即可。`
+                        : "選擇毛孩與服務後，就能建立住宿或美容預約。"}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to={repeatBookingUrl}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#6f9fc2] px-5 py-2.5 text-sm text-[#3f789f] hover:bg-[#f7fbff]"
+                >
+                  再次預約
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             {quickLinks.map((item) => {
               const Icon = item.icon;
@@ -341,6 +563,64 @@ function Info({
     <div className="rounded-2xl bg-[#faf7f4] p-5">
       <label className="block text-sm text-gray-500 mb-2">{label}</label>
       {children}
+    </div>
+  );
+}
+
+type PetSummary = {
+  id: string;
+  name: string;
+};
+
+type CareLogSummary = {
+  id: string;
+  message: string;
+  logType: string;
+  createdAt: string;
+};
+
+type OrderSummary = {
+  id: string;
+  petId: string;
+  petName?: string;
+  serviceType: "accommodation" | "grooming";
+  startDate: string;
+  endDate?: string | null;
+  status: string;
+  paymentStatus: string;
+  careLogs?: CareLogSummary[];
+};
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+  tone: "brown" | "blue" | "gold" | "rose";
+}) {
+  const toneClass = {
+    brown: "bg-[#fdf0e0] text-[#6b3a2a]",
+    blue: "bg-[#f7fbff] text-[#6f9fc2]",
+    gold: "bg-[#fff8e6] text-[#a97922]",
+    rose: "bg-[#fff0f0] text-[#b87868]",
+  }[tone];
+
+  return (
+    <div className="rounded-3xl border border-[#f0e6df] bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClass}`}>
+          {icon}
+        </div>
+        <p className="text-xs text-gray-400">{label}</p>
+      </div>
+      <p className="text-3xl text-[#3d1a0d]">{value}</p>
+      <p className="mt-2 text-xs leading-relaxed text-gray-500">{hint}</p>
     </div>
   );
 }

@@ -16,9 +16,11 @@ import {
   RefreshCcw,
   ChevronDown,
   Image,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "../config";
+import MemberBackButton from "../components/MemberBackButton";
 
 interface Order {
   id: string;
@@ -72,8 +74,17 @@ export default function Orders() {
   const [payOrderId, setPayOrderId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("線上付款");
   const [canceling, setCanceling] = useState(false);
-  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
-  const [showCanceledOrders, setShowCanceledOrders] = useState(false);
+  const [showHistoryOrders, setShowHistoryOrders] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<
+    "all" | "completed" | "canceled"
+  >("all");
+  const [historyKeyword, setHistoryKeyword] = useState("");
+  const [historyStartDate, setHistoryStartDate] = useState("");
+  const [historyEndDate, setHistoryEndDate] = useState("");
+  const [serviceFilter, setServiceFilter] = useState<
+    "all" | "accommodation" | "grooming"
+  >("all");
+  const [paymentFilter, setPaymentFilter] = useState<"all" | "unpaid">("all");
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
 
@@ -258,6 +269,51 @@ export default function Orders() {
     (order) => order.status === "已取消"
   );
 
+  const filteredActiveOrders = activeOrders.filter((order) => {
+    const matchService =
+      serviceFilter === "all" || order.serviceType === serviceFilter;
+    const matchPayment =
+      paymentFilter === "all" || order.paymentStatus !== "已付款";
+
+    return matchService && matchPayment;
+  });
+
+  const historyOrders = [...completedOrders, ...canceledOrders]
+    .filter((order) => {
+      if (historyFilter === "completed") return order.status === "已完成";
+      if (historyFilter === "canceled") return order.status === "已取消";
+      return true;
+    })
+    .filter((order) => {
+      const keyword = historyKeyword.trim().toLowerCase();
+      const title =
+        order.serviceType === "accommodation"
+          ? roomNames[order.roomType as keyof typeof roomNames] || "住宿服務"
+          : groomingNames[order.groomingService as keyof typeof groomingNames] ||
+            "美容服務";
+      const content = [
+        order.id,
+        order.petName,
+        title,
+        order.status,
+        order.paymentStatus,
+        order.startDate,
+        order.endDate,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const matchKeyword = !keyword || content.includes(keyword);
+      const matchStart = !historyStartDate || order.startDate >= historyStartDate;
+      const matchEnd = !historyEndDate || order.startDate <= historyEndDate;
+
+      return matchKeyword && matchStart && matchEnd;
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
   const getOrderTitle = (order: Order) => {
     if (order.serviceType === "accommodation") {
       return roomNames[order.roomType as keyof typeof roomNames] || "住宿服務";
@@ -303,6 +359,9 @@ export default function Orders() {
       <div className="min-h-screen bg-gradient-to-br from-[#fdf6f0] via-[#fff8f2] to-[#f5ede8] py-16">
         <div className="max-w-3xl mx-auto px-4">
           <div className="bg-white rounded-3xl shadow-xl p-10 border border-[#f0e6df] text-center">
+            <div className="mb-6 text-left">
+              <MemberBackButton />
+            </div>
             <div className="text-6xl mb-6">📋</div>
 
             <h1 className="text-3xl text-[#3d1a0d] mb-4">我的訂單</h1>
@@ -332,7 +391,11 @@ export default function Orders() {
           📋
         </div>
 
-        <div className="max-w-6xl mx-auto px-4 text-center relative">
+        <div className="max-w-6xl mx-auto px-4 relative">
+          <div className="mb-6">
+            <MemberBackButton />
+          </div>
+          <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 text-[#6b3a2a] text-sm shadow-sm mb-6">
             <FileText className="w-4 h-4" />
             訂單管理
@@ -360,22 +423,70 @@ export default function Orders() {
                 : ""}
             </p>
           </div>
+          </div>
         </div>
       </section>
 
       {/* Content */}
       <section className="py-16">
-        <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-3 gap-8 items-start">
-          {/* 左側：目前訂單 */}
-          <div className="lg:col-span-2">
+        <div className="max-w-7xl mx-auto px-4">
+          <div>
             <div className="mb-6">
               <p className="text-sm mb-2 text-[#b87868]">CURRENT ORDERS</p>
-              <h2 className="text-3xl text-[#3d1a0d]">
-                目前預約
-              </h2>
+              <h2 className="text-3xl text-[#3d1a0d]">目前預約</h2>
               <p className="text-sm text-gray-600 mt-2">
                 尚未完成或尚未取消的訂單會顯示在這裡。
               </p>
+            </div>
+
+            <div className="mb-6 rounded-3xl border border-[#f0e6df] bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm text-[#3d1a0d]">快速篩選</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    共 {activeOrders.length} 筆目前預約，符合條件 {filteredActiveOrders.length} 筆
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "全部服務", value: "all" },
+                    { label: "住宿", value: "accommodation" },
+                    { label: "美容", value: "grooming" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() =>
+                        setServiceFilter(
+                          item.value as "all" | "accommodation" | "grooming"
+                        )
+                      }
+                      className={`rounded-full px-4 py-2 text-sm transition-all ${
+                        serviceFilter === item.value
+                          ? "bg-[#6b3a2a] text-white"
+                          : "bg-[#faf7f4] text-[#6b3a2a] hover:bg-[#f3e4d7]"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPaymentFilter((value) =>
+                        value === "unpaid" ? "all" : "unpaid"
+                      )
+                    }
+                    className={`rounded-full px-4 py-2 text-sm transition-all ${
+                      paymentFilter === "unpaid"
+                        ? "bg-[#b87868] text-white"
+                        : "bg-[#fff0f0] text-[#b87868] hover:bg-[#ffe4df]"
+                    }`}
+                  >
+                    只看待付款
+                  </button>
+                </div>
+              </div>
             </div>
 
             {activeOrders.length === 0 ? (
@@ -394,9 +505,19 @@ export default function Orders() {
                   前往預約
                 </button>
               </div>
+            ) : filteredActiveOrders.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-[#f0e6df] shadow-md p-10 text-center">
+                <FileText className="w-12 h-12 text-[#c8a97e] mx-auto mb-4" />
+                <h3 className="text-2xl text-[#3d1a0d] mb-2">
+                  沒有符合條件的預約
+                </h3>
+                <p className="text-gray-600">
+                  可以切換篩選條件，或展開下方歷史紀錄查看。
+                </p>
+              </div>
             ) : (
               <div className="space-y-6">
-                {activeOrders.map((order) => (
+                {filteredActiveOrders.map((order) => (
                   <OrderCard
                     key={order.id}
                     order={order}
@@ -413,63 +534,131 @@ export default function Orders() {
             )}
           </div>
 
-          {/* 右側：旁邊紀錄 */}
-          <aside className="space-y-8 lg:sticky lg:top-24">
-            {/* 已完成 */}
-            <SideSection
-              title="已完成"
-              subtitle="完成的服務會收在這裡"
-              icon={<CheckCircle className="w-5 h-5" />}
-              count={completedOrders.length}
-              tone="green"
-              collapsed={!showCompletedOrders}
-              onToggle={() => setShowCompletedOrders((value) => !value)}
-            >
-              {completedOrders.length === 0 ? (
-                <SideEmpty text="目前沒有已完成訂單" />
-              ) : (
-                <div className="space-y-4">
-                  {completedOrders.map((order) => (
-                    <MiniOrderCard
-                      key={order.id}
-                      order={order}
-                      title={getOrderTitle(order)}
-                      statusClass={getStatusBadge(order.status)}
-                      onReview={() => setReviewOrderId(order.id)}
-                      onDetail={() => navigate(`/orders/${order.id}`)}
-                    />
-                  ))}
+          <div className="mt-10 rounded-3xl border border-[#f0e6df] bg-[#faf7f4] p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#6b3a2a] shadow-sm">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl text-[#3d1a0d]">歷史紀錄</h3>
+                    <p className="text-xs text-gray-500">
+                      已完成 {completedOrders.length} 筆，已取消 {canceledOrders.length} 筆，預設收起保留查詢。
+                    </p>
+                  </div>
                 </div>
-              )}
-            </SideSection>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHistoryOrders((value) => !value)}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm text-[#6b3a2a] shadow-sm hover:bg-[#fdf6f0]"
+              >
+                {showHistoryOrders ? "收起歷史紀錄" : "查看歷史紀錄"}
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    showHistoryOrders ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+            </div>
 
-            {/* 已取消 */}
-            <SideSection
-              title="已取消"
-              subtitle="取消後會留在旁邊方便查看"
-              icon={<CircleX className="w-5 h-5" />}
-              count={canceledOrders.length}
-              tone="rose"
-              collapsed={!showCanceledOrders}
-              onToggle={() => setShowCanceledOrders((value) => !value)}
-            >
-              {canceledOrders.length === 0 ? (
-                <SideEmpty text="目前沒有已取消訂單" />
-              ) : (
-                <div className="space-y-4">
-                  {canceledOrders.map((order) => (
-                    <MiniOrderCard
-                      key={order.id}
-                      order={order}
-                      title={getOrderTitle(order)}
-                      statusClass={getStatusBadge(order.status)}
-                      onDetail={() => navigate(`/orders/${order.id}`)}
+            {showHistoryOrders && (
+              <div className="mt-5">
+                <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
+                  <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_auto]">
+                    <label className="relative block">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9c7060]" />
+                      <input
+                        value={historyKeyword}
+                        onChange={(event) =>
+                          setHistoryKeyword(event.target.value)
+                        }
+                        className="w-full rounded-full border border-[#eadfd8] bg-[#fffefe] py-2.5 pl-10 pr-4 text-sm outline-none focus:border-[#6b3a2a]"
+                        placeholder="搜尋訂單編號、毛孩或服務"
+                      />
+                    </label>
+                    <input
+                      type="date"
+                      value={historyStartDate}
+                      onChange={(event) =>
+                        setHistoryStartDate(event.target.value)
+                      }
+                      className="rounded-full border border-[#eadfd8] bg-[#fffefe] px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-[#6b3a2a]"
+                      aria-label="歷史紀錄起始日期"
                     />
+                    <input
+                      type="date"
+                      value={historyEndDate}
+                      onChange={(event) =>
+                        setHistoryEndDate(event.target.value)
+                      }
+                      className="rounded-full border border-[#eadfd8] bg-[#fffefe] px-4 py-2.5 text-sm text-gray-600 outline-none focus:border-[#6b3a2a]"
+                      aria-label="歷史紀錄結束日期"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHistoryKeyword("");
+                        setHistoryStartDate("");
+                        setHistoryEndDate("");
+                      }}
+                      className="rounded-full border border-[#eadfd8] px-4 py-2.5 text-sm text-[#6b3a2a] hover:bg-[#faf7f4]"
+                    >
+                      清除
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {[
+                    { label: "全部歷史", value: "all", icon: <FileText className="h-4 w-4" /> },
+                    { label: "已完成", value: "completed", icon: <CheckCircle className="h-4 w-4" /> },
+                    { label: "已取消", value: "canceled", icon: <CircleX className="h-4 w-4" /> },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() =>
+                        setHistoryFilter(
+                          item.value as "all" | "completed" | "canceled"
+                        )
+                      }
+                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-all ${
+                        historyFilter === item.value
+                          ? "bg-[#6b3a2a] text-white"
+                          : "bg-white text-[#6b3a2a] hover:bg-[#fdf6f0]"
+                      }`}
+                    >
+                      {item.icon}
+                      {item.label}
+                    </button>
                   ))}
                 </div>
-              )}
-            </SideSection>
-          </aside>
+
+                {historyOrders.length === 0 ? (
+                  <SideEmpty text="目前沒有符合條件的歷史紀錄" />
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {historyOrders.map((order) => (
+                      <MiniOrderCard
+                        key={order.id}
+                        order={order}
+                        title={getOrderTitle(order)}
+                        statusClass={getStatusBadge(order.status)}
+                        onReview={
+                          order.status === "已完成"
+                            ? () => setReviewOrderId(order.id)
+                            : undefined
+                        }
+                        onDetail={() => navigate(`/orders/${order.id}`)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

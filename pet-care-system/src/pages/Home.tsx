@@ -10,6 +10,7 @@ import {
   Clock,
   ArrowRight,
   CheckCircle,
+  MessageSquare,
 } from "lucide-react";
 import { API_BASE } from "../config";
 
@@ -25,6 +26,22 @@ type AvailabilityState = {
   vip: RoomAvailability;
 };
 
+type CareLog = {
+  id: string;
+  orderId: string;
+  authorName: string;
+  logType: string;
+  message: string;
+  photoUrl?: string;
+  createdAt: string;
+};
+
+type CustomerOrder = {
+  id: string;
+  petName?: string;
+  careLogs?: CareLog[];
+};
+
 export default function Home() {
   const { user } = useAuth();
 
@@ -35,6 +52,9 @@ export default function Home() {
     deluxe: { capacity: 3, booked: 0, remaining: 3 },
     vip: { capacity: 2, booked: 0, remaining: 2 },
   });
+  const [recentCareLog, setRecentCareLog] = useState<
+    (CareLog & { petName?: string }) | null
+  >(null);
 
   useEffect(() => {
     async function fetchRoomAvailability() {
@@ -55,6 +75,47 @@ export default function Home() {
 
     fetchRoomAvailability();
   }, [today]);
+
+  useEffect(() => {
+    async function fetchRecentCareLog() {
+      if (!user) {
+        setRecentCareLog(null);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_BASE}/orders`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) return;
+
+        const logs = ((data.orders || []) as CustomerOrder[])
+          .flatMap((order) =>
+            (order.careLogs || []).map((log) => ({
+              ...log,
+              petName: order.petName,
+            }))
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
+          );
+
+        setRecentCareLog(logs[0] || null);
+      } catch (error) {
+        console.error("首頁照護回報讀取失敗", error);
+      }
+    }
+
+    fetchRecentCareLog();
+  }, [user]);
 
   return (
     <div>
@@ -105,7 +166,7 @@ export default function Home() {
               </div>
 
               <h1
-                className="text-5xl md:text-6xl mb-6 leading-tight tracking-tight hero-title-animate"
+                className="text-4xl md:text-6xl mb-6 leading-tight tracking-tight hero-title-animate"
                 style={{ color: "#3d1a0d" }}
               >
                 給毛孩
@@ -273,16 +334,31 @@ export default function Home() {
                   {/* 登入後才顯示：即時回報 */}
                   {user && (
                     <div className="absolute right-4 bottom-4 rounded-2xl bg-white/88 backdrop-blur-sm shadow-md border border-white/60 px-4 py-4 w-56">
-                      <p className="text-[11px] text-gray-500 mb-2">
-                        即時照護回報
-                      </p>
+                      <div className="mb-2 flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-[#6f9fc2]" />
+                        <p className="text-[11px] text-gray-500">
+                          最近照護回報
+                        </p>
+                      </div>
 
                       <p className="text-sm text-[#3d1a0d] leading-relaxed">
-                        小Q 今日狀態良好，已完成散步與餵食。
+                        {recentCareLog
+                          ? `${recentCareLog.petName || "毛孩"}：${
+                              recentCareLog.message
+                            }`
+                          : "目前尚無照護回報，服務完成後會在這裡顯示。"}
                       </p>
 
-                      <div className="mt-3 inline-flex px-3 py-1 rounded-full bg-[#f3f7f3] text-[#5f8a5f] text-xs">
-                        已更新
+                      <div
+                        className={`mt-3 inline-flex px-3 py-1 rounded-full text-xs ${
+                          recentCareLog?.logType === "異常"
+                            ? "bg-[#fff0f0] text-[#b85c68]"
+                            : "bg-[#f3f7f3] text-[#5f8a5f]"
+                        }`}
+                      >
+                        {recentCareLog
+                          ? recentCareLog.logType
+                          : "等待更新"}
                       </div>
                     </div>
                   )}

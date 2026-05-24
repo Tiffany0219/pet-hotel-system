@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { ReactNode, ReactElement } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   Calendar as CalendarIcon,
   PawPrint,
@@ -24,6 +24,7 @@ import {
   type RoomType,
   type ServiceCatalog,
 } from "../systemSettings";
+import MemberBackButton from "../components/MemberBackButton";
 
 interface Pet {
   id: string;
@@ -49,6 +50,7 @@ type GroomingSlot = {
 export default function Booking() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [pets, setPets] = useState<Pet[]>([]);
   const [loadingPets, setLoadingPets] = useState(true);
@@ -102,14 +104,27 @@ export default function Booking() {
       setPets(petList);
 
       setFormData((prev) => {
+        const petIdFromQuery = searchParams.get("petId") || "";
+        const serviceFromQuery = searchParams.get("service");
+        const requestedPetExists = petList.some(
+          (pet) => pet.id === petIdFromQuery
+        );
+        const requestedService =
+          serviceFromQuery === "grooming" ||
+          serviceFromQuery === "accommodation"
+            ? serviceFromQuery
+            : prev.serviceType;
         const currentPetStillExists = petList.some(
           (pet) => pet.id === prev.petId
         );
 
         return {
           ...prev,
+          serviceType: requestedService,
           petId:
-            currentPetStillExists
+            requestedPetExists
+              ? petIdFromQuery
+              : currentPetStillExists
               ? prev.petId
               : petList.length > 0
               ? petList[0].id
@@ -319,7 +334,11 @@ export default function Booking() {
           📅
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 text-center relative">
+        <div className="max-w-7xl mx-auto px-4 relative">
+          <div className="mb-6">
+            <MemberBackButton />
+          </div>
+          <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 text-[#6b3a2a] text-sm shadow-sm mb-6">
             <CalendarIcon className="w-4 h-4" />
             線上預約
@@ -330,6 +349,7 @@ export default function Booking() {
           <p className="text-xl text-[#6b3a2a] max-w-2xl mx-auto leading-relaxed">
             選擇毛孩需要的服務，我們將為您安排最合適的照護時段。
           </p>
+          </div>
         </div>
       </section>
 

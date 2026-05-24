@@ -21,6 +21,11 @@
 - 店務人員新增照護紀錄，並可控制是否顯示給客戶
 - 會員可查看自己訂單的公開照護紀錄
 - 店務人員可查看訂單操作紀錄，包含狀態、安排、付款與照護紀錄異動
+- 會員通知中心與通知已讀功能
+- 員工上班 / 下班打卡紀錄
+- 美容師與寵物照護師工作排程查詢
+- 美容師與寵物照護師可新增服務回報、異常通知與完成照片
+- 系統管理員可匯出營運資料，並管理員工班表
 
 ## 安裝與執行
 
@@ -74,6 +79,20 @@ Email: staff@test.com
 Password: staff123
 ```
 
+美容師：
+
+```txt
+Email: groomer@test.com
+Password: groomer123
+```
+
+寵物照護師：
+
+```txt
+Email: caregiver@test.com
+Password: care123
+```
+
 系統管理員：
 
 ```txt
@@ -120,6 +139,7 @@ Authorization: `Bearer ${localStorage.getItem("token")}`
 - PATCH `/api/orders/:id/pay`
 - POST `/api/orders/:id/review`
 - GET `/api/orders/:id/care-logs`
+- GET `/api/orders/:id`
 
 ### Admin
 
@@ -143,3 +163,23 @@ Authorization: `Bearer ${localStorage.getItem("token")}`
 - GET `/api/admin/orders/:id/audit-logs`
 - GET `/api/admin/orders/:id/care-logs`
 - POST `/api/admin/orders/:id/care-logs`
+
+### Staff / Worker
+
+- GET `/api/staff/attendance/today`
+- POST `/api/staff/attendance/clock-in`
+- POST `/api/staff/attendance/clock-out`
+- GET `/api/worker/schedule`
+- POST `/api/worker/orders/:id/report`
+
+### Notifications
+
+- GET `/api/notifications`
+- PATCH `/api/notifications/:id/read`
+- PATCH `/api/notifications/read-all`
+
+### Public
+
+- GET `/api/public/system-settings`
+- GET `/api/availability/rooms`
+- GET `/api/availability/grooming`

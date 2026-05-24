@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
-  ArrowLeft,
   CalendarDays,
   CreditCard,
   Home,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "../config";
+import MemberBackButton from "../components/MemberBackButton";
 
 type CareLog = {
   id: string;
@@ -121,13 +121,7 @@ export default function OrderDetail() {
     <div className="min-h-screen bg-[#fffefe]">
       <section className="border-b border-[#f0e6df] bg-[#faf7f4]">
         <div className="mx-auto max-w-6xl px-4 py-8">
-          <Link
-            to="/orders"
-            className="inline-flex items-center gap-2 text-sm text-[#6b3a2a] hover:underline"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            回到我的訂單
-          </Link>
+          <MemberBackButton label="回到我的訂單" to="/orders" />
           <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-sm text-[#b87868]">ORDER DETAIL</p>

@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { API_BASE } from "../config";
+import MemberBackButton from "../components/MemberBackButton";
 
 const petImages = [
   {
@@ -303,7 +304,11 @@ export default function Pets() {
           🐶
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 relative flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+        <div className="max-w-7xl mx-auto px-4 relative">
+          <div className="mb-6">
+            <MemberBackButton />
+          </div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 text-[#6b3a2a] text-sm shadow-sm mb-6">
               <Sparkles className="w-4 h-4" />
@@ -335,6 +340,7 @@ export default function Pets() {
                 新增寵物
               </button>
             )}
+          </div>
           </div>
         </div>
       </section>

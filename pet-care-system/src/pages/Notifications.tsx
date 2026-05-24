@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCircle, MessageSquare, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "../config";
+import MemberBackButton from "../components/MemberBackButton";
 
 type NotificationItem = {
   id: string;
@@ -96,6 +97,9 @@ export default function Notifications() {
     <div className="min-h-screen bg-[#fffefe]">
       <section className="bg-[#faf7f4] border-b border-[#f0e6df]">
         <div className="mx-auto max-w-5xl px-4 py-10">
+          <div className="mb-6">
+            <MemberBackButton />
+          </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-[#6b3a2a] shadow-sm">
