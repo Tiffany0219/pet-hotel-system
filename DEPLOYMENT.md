@@ -30,6 +30,22 @@ https://pet-care-backend.onrender.com
 https://pet-care-backend.onrender.com/api
 ```
 
+如果 Render log 出現：
+
+```txt
+ERROR: Could not open requirements file: No such file or directory: 'requirements.txt'
+```
+
+代表 Render 沒有進到後端資料夾。請到 Render 服務的 **Settings**，確認：
+
+```txt
+Root Directory = pet-care-backend/pet-care-backend
+Build Command = pip install -r requirements.txt
+Start Command = gunicorn app:app
+```
+
+儲存後按 **Manual Deploy > Deploy latest commit**。
+
 ## 2. 前端部署到 Vercel
 
 1. 登入 Vercel，選擇 **Add New Project**。
