@@ -13,6 +13,7 @@ import {
   RefreshCcw,
   Plus,
   CheckCircle2,
+  ChevronDown,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
@@ -720,11 +721,11 @@ export default function Booking() {
                                     </p>
                                   </div>
                                 </div>
-                                <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
-                                  <p className="text-xs text-gray-500">
-                                    起
+                                <div className="flex min-w-[9.5rem] items-center justify-between gap-4 rounded-2xl border border-[#f0e6df] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(80,53,42,0.08)]">
+                                  <p className="rounded-full bg-[#fff5f2] px-2.5 py-1 text-xs font-medium text-[#b87868]">
+                                    起價
                                   </p>
-                                  <p className="text-xl text-[#6b3a2a]">
+                                  <p className="whitespace-nowrap text-xl font-semibold text-[#6b3a2a]">
                                     {priceText(
                                       serviceCatalog.groomingPrices[
                                         service.id
@@ -756,33 +757,38 @@ export default function Booking() {
                     </Field>
 
                     <Field label="美容時段 *">
-                      <select
-                        value={formData.scheduledTime}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            scheduledTime: e.target.value,
-                          })
-                        }
-                        className="input-soft"
-                        required
-                      >
-                        {loadingGroomingSlots ? (
-                          <option value="">讀取時段中...</option>
-                        ) : groomingSlots.length === 0 ? (
-                          <option value="">目前沒有可預約時段</option>
-                        ) : (
-                          groomingSlots.map((slot) => (
-                            <option
-                              key={slot.time}
-                              value={slot.time}
-                              disabled={slot.remaining <= 0}
-                            >
-                              {slot.time}（剩 {slot.remaining} / {slot.capacity}）
-                            </option>
-                          ))
-                        )}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={formData.scheduledTime}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              scheduledTime: e.target.value,
+                            })
+                          }
+                          className="h-14 w-full appearance-none rounded-3xl border border-[#eadfd8] bg-[#fffaf6] px-5 pr-14 text-base font-semibold text-[#3d1a0d] shadow-[0_12px_28px_rgba(80,53,42,0.06)] outline-none transition hover:border-[#c8a97e] focus:border-[#6b3a2a] focus:bg-white focus:ring-4 focus:ring-[#f4ebe5]"
+                          required
+                        >
+                          {loadingGroomingSlots ? (
+                            <option value="">讀取時段中...</option>
+                          ) : groomingSlots.length === 0 ? (
+                            <option value="">目前沒有可預約時段</option>
+                          ) : (
+                            groomingSlots.map((slot) => (
+                              <option
+                                key={slot.time}
+                                value={slot.time}
+                                disabled={slot.remaining <= 0}
+                              >
+                                {slot.time}（剩 {slot.remaining} / {slot.capacity}）
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        <span className="pointer-events-none absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-2xl bg-white text-[#6b3a2a] shadow-sm">
+                          <ChevronDown className="h-5 w-5" />
+                        </span>
+                      </div>
                     </Field>
                   </>
                 )}

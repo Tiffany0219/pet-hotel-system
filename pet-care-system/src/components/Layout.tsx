@@ -204,6 +204,10 @@ export default function Layout() {
                     notifications={notifications}
                     unreadCount={unreadCount}
                     onToggle={() => setNotificationOpen((value) => !value)}
+                    onOpenCenter={() => {
+                      setNotificationOpen(false);
+                      navigate("/notifications");
+                    }}
                     onRead={markNotificationRead}
                     onReadAll={markAllNotificationsRead}
                   />
@@ -366,6 +370,11 @@ export default function Layout() {
                 notifications={notifications}
                 unreadCount={unreadCount}
                 onToggle={() => setNotificationOpen((value) => !value)}
+                onOpenCenter={() => {
+                  setNotificationOpen(false);
+                  setOpen(false);
+                  navigate("/notifications");
+                }}
                 onRead={markNotificationRead}
                 onReadAll={markAllNotificationsRead}
               />
@@ -543,6 +552,7 @@ function NotificationBell({
   notifications,
   unreadCount,
   onToggle,
+  onOpenCenter,
   onRead,
   onReadAll,
 }: {
@@ -550,6 +560,7 @@ function NotificationBell({
   notifications: NotificationItem[];
   unreadCount: number;
   onToggle: () => void;
+  onOpenCenter: () => void;
   onRead: (notification: NotificationItem) => void;
   onReadAll: () => void;
 }) {
@@ -572,12 +583,16 @@ function NotificationBell({
       {open && (
         <div className="absolute right-0 top-full z-50 mt-3 w-80 overflow-hidden rounded-2xl border border-[#f0e6df] bg-white shadow-2xl">
           <div className="flex items-center justify-between border-b border-[#f0e6df] px-4 py-3">
-            <div>
-              <p className="text-sm text-[#3d1a0d]">通知中心</p>
+            <button
+              type="button"
+              onClick={onOpenCenter}
+              className="rounded-xl px-2 py-1 text-left transition hover:bg-[#faf7f4]"
+            >
+              <p className="text-sm font-semibold text-[#3d1a0d]">通知中心</p>
               <p className="text-xs text-gray-500">
                 {unreadCount > 0 ? `${unreadCount} 則未讀通知` : "目前沒有未讀通知"}
               </p>
-            </div>
+            </button>
             {unreadCount > 0 && (
               <button
                 type="button"
