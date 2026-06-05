@@ -46,6 +46,13 @@ Start Command = gunicorn app:app
 
 儲存後按 **Manual Deploy > Deploy latest commit**。
 
+如果不想改 Root Directory，也可以用根目錄部署設定：
+
+```txt
+Build Command = pip install -r requirements.txt
+Start Command = gunicorn --chdir pet-care-backend/pet-care-backend app:app
+```
+
 ## 2. 前端部署到 Vercel
 
 1. 登入 Vercel，選擇 **Add New Project**。
