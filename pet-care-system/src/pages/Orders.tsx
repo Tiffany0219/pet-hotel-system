@@ -360,6 +360,7 @@ export default function Orders() {
       待確認: "bg-[#fff8f2] text-[#b87868]",
       已確認: "bg-[#f7fbff] text-[#6f9fc2]",
       待會員確認: "bg-[#fff8e8] text-[#a97922]",
+      已入住: "bg-[#eef7ef] text-[#4f7f55]",
       進行中: "bg-[#fdf6f0] text-[#6b3a2a]",
       已完成: "bg-[#f3f7f3] text-[#5f8a5f]",
       已取消: "bg-[#fff0f0] text-[#b85c38]",

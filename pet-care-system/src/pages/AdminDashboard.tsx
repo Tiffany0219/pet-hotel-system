@@ -249,7 +249,7 @@ function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-const statusOptions = ["待確認", "已確認", "待會員確認", "進行中", "已完成", "已取消"];
+const statusOptions = ["待確認", "已確認", "待會員確認", "已入住", "進行中", "已完成", "已取消"];
 const paymentStatusOptions = ["未付款", "已付訂金", "已付款"];
 const paymentMethodOptions = ["未設定", "現金", "轉帳", "信用卡", "線上付款", "現場付款", "其他"];
 const serviceOptions = [
@@ -686,7 +686,7 @@ export default function AdminDashboard() {
   );
 
   const inProgressOrders = useMemo(
-    () => sortedOrders.filter((order) => order.status === "進行中"),
+    () => sortedOrders.filter((order) => ["已入住", "進行中"].includes(order.status)),
     [sortedOrders]
   );
 
@@ -729,7 +729,7 @@ export default function AdminDashboard() {
         (order) =>
           order.status !== "已取消" &&
           order.paymentStatus !== "已付款" &&
-          ["待確認", "已確認", "待會員確認", "進行中"].includes(order.status)
+          ["待確認", "已確認", "待會員確認", "已入住", "進行中"].includes(order.status)
       ),
     [sortedOrders]
   );
@@ -852,6 +852,7 @@ export default function AdminDashboard() {
       待確認: "#b87868",
       已確認: "#6f9fc2",
       待會員確認: "#c8a15f",
+      已入住: "#4f7f55",
       進行中: "#6b3a2a",
       已完成: "#5f8a5f",
       已取消: "#b85c68",
@@ -1404,7 +1405,7 @@ function FrontDeskWorkspace({
       order.status !== "已取消"
   );
   const activeDeskOrders = orders.filter(
-    (order) => order.status === "進行中"
+    (order) => ["已入住", "進行中"].includes(order.status)
   );
   const timelineOrders = [
     ...todayCheckIns,
@@ -1996,14 +1997,20 @@ function DeskQueue({
                 </div>
                 <p className="mt-2 text-xs text-gray-500">{paymentSummary(order)}</p>
               </button>
-              <button
-                type="button"
-                disabled={updatingId === order.id}
-                onClick={() => onAction(order.id)}
-                className="rounded-2xl bg-[#202124] px-5 py-3 text-sm text-white transition hover:bg-[#34373b] disabled:opacity-60"
-              >
-                {updatingId === order.id ? "處理中..." : actionLabel}
-              </button>
+              {title.includes("入住") && order.status === "已入住" ? (
+                <span className="inline-flex items-center justify-center rounded-2xl bg-[#eef7ef] px-5 py-3 text-sm font-semibold text-[#4f7f55]">
+                  已入住
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={updatingId === order.id}
+                  onClick={() => onAction(order.id)}
+                  className="rounded-2xl bg-[#202124] px-5 py-3 text-sm text-white transition hover:bg-[#34373b] disabled:opacity-60"
+                >
+                  {updatingId === order.id ? "處理中..." : actionLabel}
+                </button>
+              )}
             </div>
           ))
         )}
@@ -5863,6 +5870,7 @@ function statusBadge(status: string) {
     待確認: "bg-[#fff8f2] text-[#b87868]",
     已確認: "bg-[#edf6fc] text-[#3f789f]",
     待會員確認: "bg-[#fff8e8] text-[#a97922]",
+    已入住: "bg-[#eef7ef] text-[#4f7f55]",
     進行中: "bg-[#f5efe9] text-[#6b3a2a]",
     已完成: "bg-[#eef7ef] text-[#4f7f55]",
     已取消: "bg-[#fff0f0] text-[#b85c68]",
@@ -5888,6 +5896,7 @@ function statusSelectClass(status: string) {
     待確認: "border-[#f3d6c9] bg-[#fff8f2] text-[#b87868]",
     已確認: "border-[#d7e8f3] bg-[#f7fbff] text-[#477fa6]",
     待會員確認: "border-[#f1d58a] bg-[#fff8e8] text-[#8a611b]",
+    已入住: "border-[#d9ead9] bg-[#f3f7f3] text-[#5f8a5f]",
     進行中: "border-[#eadfd8] bg-[#f5efe9] text-[#6b3a2a]",
     已完成: "border-[#d9ead9] bg-[#f3f7f3] text-[#5f8a5f]",
     已取消: "border-[#f1d5d5] bg-[#fff0f0] text-[#b85c68]",

@@ -1883,7 +1883,7 @@ def update_order_status(order_id):
     data = request.get_json() or {}
     next_status = data.get("status")
 
-    allowed_status = ["待確認", "已確認", "待會員確認", "進行中", "已完成", "已取消"]
+    allowed_status = ["待確認", "已確認", "待會員確認", "已入住", "進行中", "已完成", "已取消"]
 
     if next_status not in allowed_status:
         return jsonify({"message": "狀態不正確"}), 400
@@ -2045,7 +2045,7 @@ def admin_stats():
 
     all_orders = Order.query.all()
     valid_orders = [order for order in all_orders if order.status != "已取消"]
-    active_status = {"待確認", "已確認", "待會員確認", "進行中"}
+    active_status = {"待確認", "已確認", "待會員確認", "已入住", "進行中"}
 
     revenue = sum(
         order.paid_amount or (
@@ -2766,7 +2766,7 @@ def admin_update_order_status(order_id):
 
     data = request.get_json() or {}
     next_status = data.get("status")
-    allowed_status = ["待確認", "已確認", "待會員確認", "進行中", "已完成", "已取消"]
+    allowed_status = ["待確認", "已確認", "待會員確認", "已入住", "進行中", "已完成", "已取消"]
 
     if next_status not in allowed_status:
         return jsonify({"message": "狀態不正確"}), 400
@@ -2938,7 +2938,7 @@ def admin_check_in_order(order_id):
         return jsonify({"message": "請先安排房位再辦理入住"}), 400
 
     previous_status = order.status
-    order.status = "進行中"
+    order.status = "已入住"
     create_customer_notification(
         order,
         "毛孩已入住",
@@ -2947,7 +2947,7 @@ def admin_check_in_order(order_id):
     )
     create_audit_log(
         "辦理入住",
-        f"櫃檯辦理入住，狀態由「{previous_status}」改為「進行中」",
+        f"櫃檯辦理入住，狀態由「{previous_status}」改為「已入住」",
         order,
     )
     db.session.commit()
@@ -3181,7 +3181,7 @@ def worker_update_order_status(order_id):
 
     data = request.get_json() or {}
     next_status = data.get("status")
-    allowed_status = ["已確認", "待會員確認", "進行中", "已完成"]
+    allowed_status = ["已確認", "待會員確認", "已入住", "進行中", "已完成"]
 
     if next_status not in allowed_status:
         return jsonify({"message": "狀態不正確"}), 400

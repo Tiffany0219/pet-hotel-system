@@ -162,7 +162,7 @@ export default function WorkerDashboard() {
     return {
       total: orders.length,
       shifts: shifts.length,
-      active: orders.filter((order) => order.status === "進行中").length,
+      active: orders.filter((order) => ["已入住", "進行中"].includes(order.status)).length,
       pending: orders.filter((order) => order.status === "待確認" || order.status === "已確認").length,
       completed: orders.filter((order) => order.status === "已完成").length,
       abnormal: orders.reduce(
@@ -446,7 +446,11 @@ function WorkOrderCard({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {["進行中", "已完成"].map((status) => (
+            {[
+              ...(order.serviceType === "accommodation" ? ["已入住"] : []),
+              "進行中",
+              "已完成",
+            ].map((status) => (
               <button
                 key={status}
                 type="button"
@@ -480,7 +484,12 @@ function WorkOrderCard({
             <ServiceChecklist order={order} latestLogs={latestLogs} />
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {["已確認", "進行中", "已完成"].map((status) => (
+              {[
+                "已確認",
+                ...(order.serviceType === "accommodation" ? ["已入住"] : []),
+                "進行中",
+                "已完成",
+              ].map((status) => (
                 <button
                   key={status}
                   type="button"
@@ -1089,13 +1098,13 @@ function ServiceChecklist({
   const steps =
     order.serviceType === "grooming"
       ? [
-          { label: "接單確認", done: ["已確認", "進行中", "已完成"].includes(order.status) },
+          { label: "接單確認", done: ["已確認", "已入住", "進行中", "已完成"].includes(order.status) },
           { label: "美容前檢查", done: latestLogs.some((log) => log.logType.includes("美容")) },
           { label: "服務完成", done: order.status === "已完成" },
           { label: "家長可見回報", done: latestLogs.some((log) => log.visibleToCustomer) },
         ]
       : [
-          { label: "入住/照護確認", done: ["進行中", "已完成"].includes(order.status) },
+          { label: "入住/照護確認", done: ["已入住", "進行中", "已完成"].includes(order.status) },
           { label: "餵食喝水紀錄", done: latestLogs.some((log) => log.logType === "餵食" || log.message.includes("餵食")) },
           { label: "活動排泄紀錄", done: latestLogs.some((log) => log.message.includes("排泄") || log.message.includes("散步")) },
           { label: "家長可見回報", done: latestLogs.some((log) => log.visibleToCustomer) },
@@ -1266,6 +1275,7 @@ function statusBadge(status: string) {
     待確認: "bg-[#fff8e8] text-[#a97922]",
     已確認: "bg-[#edf6fc] text-[#3f789f]",
     待會員確認: "bg-[#fff8e8] text-[#a97922]",
+    已入住: "bg-[#eef7ef] text-[#4f7f55]",
     進行中: "bg-[#fdf0e0] text-[#6b3a2a]",
     已完成: "bg-[#eef7ef] text-[#4f7f55]",
     已取消: "bg-[#fff0f0] text-[#b85c68]",
