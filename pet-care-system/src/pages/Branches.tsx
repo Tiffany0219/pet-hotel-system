@@ -115,7 +115,7 @@ export default function Branches() {
             </div>
 
             <h1 className="text-4xl leading-tight text-[#3d1a0d] md:text-5xl">
-              找到最適合毛孩的照護據點
+              毛孩的照護據點
             </h1>
 
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-[#6b3a2a]">
