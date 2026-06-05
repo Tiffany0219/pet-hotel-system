@@ -107,8 +107,8 @@ export default function Branches() {
           <div className="absolute inset-0 bg-gradient-to-br from-[#fdf6f0] via-[#fff8f2]/95 to-[#f5ede8]" />
         </div>
 
-        <div className="relative mx-auto max-w-7xl px-4 py-16 lg:py-20">
-          <div className="max-w-3xl">
+        <div className="relative mx-auto max-w-7xl px-4 py-16 text-center lg:py-20">
+          <div className="mx-auto max-w-3xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-sm text-[#6b3a2a] shadow-sm">
               <Building2 className="h-4 w-4" />
               分店資訊
@@ -118,7 +118,7 @@ export default function Branches() {
               找到最適合毛孩的照護據點
             </h1>
 
-            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-[#6b3a2a]">
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-[#6b3a2a]">
               查看各分店的服務、交通與聯絡資訊，安心安排住宿、美容與日常照護。
             </p>
           </div>
