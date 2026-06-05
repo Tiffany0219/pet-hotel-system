@@ -1193,17 +1193,22 @@ function ReviewModal({
 
         <div className="mb-4">
           <label className="block text-sm text-gray-600 mb-2">評分</label>
-          <select
-            value={rating}
-            onChange={(e) => onRatingChange(Number(e.target.value))}
-            className="w-full px-4 py-3 border border-[#eadfd8] rounded-2xl focus:outline-none"
-          >
-            <option value={5}>5 分</option>
-            <option value={4}>4 分</option>
-            <option value={3}>3 分</option>
-            <option value={2}>2 分</option>
-            <option value={1}>1 分</option>
-          </select>
+          <div className="relative">
+            <select
+              value={rating}
+              onChange={(e) => onRatingChange(Number(e.target.value))}
+              className="h-12 w-full appearance-none rounded-3xl border border-[#eadfd8] bg-[#fffaf6] px-4 pr-12 text-sm font-semibold text-[#3d1a0d] shadow-[0_10px_24px_rgba(80,53,42,0.05)] outline-none transition hover:border-[#c8a97e] focus:border-[#6b3a2a] focus:bg-white focus:ring-4 focus:ring-[#f4ebe5]"
+            >
+              <option value={5}>5 分 - 非常滿意</option>
+              <option value={4}>4 分 - 滿意</option>
+              <option value={3}>3 分 - 普通</option>
+              <option value={2}>2 分 - 待改善</option>
+              <option value={1}>1 分 - 不滿意</option>
+            </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-2xl bg-white text-[#6b3a2a] shadow-sm">
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          </div>
         </div>
 
         <div className="mb-6">

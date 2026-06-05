@@ -513,7 +513,7 @@ function WorkOrderCard({
             />
           </div>
 
-          <div className="rounded-xl bg-[#f7f8fa] p-4">
+          <div className="rounded-2xl border border-[#eadfd8] bg-[#fffaf6] p-4">
             <QuickTemplateButtons
               order={order}
               saving={saving}
@@ -525,22 +525,25 @@ function WorkOrderCard({
               <h3>新增照護 / 異常通知</h3>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-[120px_1fr]">
-              <select
-                value={logType}
-                onChange={(event) => onLogTypeChange(event.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
-              >
-                <option value="照護">照護</option>
-                <option value="美容">美容</option>
-                <option value="餵食">餵食</option>
-                <option value="健康">健康</option>
-                <option value="異常">異常</option>
-              </select>
+            <div className="grid gap-3 sm:grid-cols-[150px_1fr]">
+              <div className="relative">
+                <select
+                  value={logType}
+                  onChange={(event) => onLogTypeChange(event.target.value)}
+                  className="h-12 w-full appearance-none rounded-2xl border border-[#eadfd8] bg-white px-4 pr-10 text-sm font-semibold text-[#3d1a0d] shadow-sm outline-none transition hover:border-[#c8a97e] focus:border-[#6b3a2a] focus:ring-4 focus:ring-[#f4ebe5]"
+                >
+                  <option value="照護">照護</option>
+                  <option value="美容">美容</option>
+                  <option value="餵食">餵食</option>
+                  <option value="健康">健康</option>
+                  <option value="異常">異常</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9b7b6f]" />
+              </div>
               <input
                 value={message}
                 onChange={(event) => onMessageChange(event.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
+                className="h-12 rounded-2xl border border-[#eadfd8] bg-white px-4 text-sm text-[#3d1a0d] shadow-sm outline-none transition placeholder:text-gray-400 hover:border-[#c8a97e] focus:border-[#6b3a2a] focus:ring-4 focus:ring-[#f4ebe5]"
                 placeholder={logType === "異常" ? "例如：食慾偏低，已通知家長並持續觀察" : "輸入服務紀錄"}
               />
             </div>
