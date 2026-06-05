@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pet-care-backend
+    env: python
+    rootDir: pet-care-backend/pet-care-backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PET_CARE_SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_ORIGINS
+        value: http://localhost:5181

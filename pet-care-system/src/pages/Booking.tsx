@@ -12,6 +12,7 @@ import {
   ArrowRight,
   RefreshCcw,
   Plus,
+  CheckCircle2,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { toast } from "sonner";
@@ -68,6 +69,7 @@ export default function Booking() {
     scheduledTime: "",
     startDate: format(new Date(), "yyyy-MM-dd"),
     endDate: format(addDays(new Date(), 1), "yyyy-MM-dd"),
+    addOnItems: [] as string[],
     notes: "",
   });
 
@@ -226,11 +228,92 @@ export default function Booking() {
     );
 
   const total = () =>
+    baseAmount() + addOnTotal();
+
+  const baseAmount = () =>
     formData.serviceType === "accommodation"
       ? serviceCatalog.roomPrices[formData.roomType] * days()
       : serviceCatalog.groomingPrices[formData.groomingService];
 
+  const addOnOptions = Object.values(serviceCatalog.addOnServices);
+  const selectedAddOns = addOnOptions.filter((option) =>
+    formData.addOnItems.includes(option.id)
+  );
+  const addOnTotal = () =>
+    selectedAddOns.reduce((sum, option) => sum + option.price, 0);
+
+  const toggleAddOn = (id: string) => {
+    setFormData((current) => ({
+      ...current,
+      addOnItems: current.addOnItems.includes(id)
+        ? current.addOnItems.filter((item) => item !== id)
+        : [...current.addOnItems, id],
+    }));
+  };
+
   const selectedPet = pets.find((p) => p.id === formData.petId);
+  const roomOptions: Array<{
+    id: RoomType;
+    name: string;
+    description: string;
+    detail: string;
+  }> = [
+    {
+      id: "standard",
+      name: roomNames.standard,
+      description: "適合小型犬貓",
+      detail: "獨立休息區、定時巡房",
+    },
+    {
+      id: "deluxe",
+      name: roomNames.deluxe,
+      description: "適合中型犬或雙寵",
+      detail: "加大空間、舒適睡墊",
+    },
+    {
+      id: "vip",
+      name: roomNames.vip,
+      description: "高隱私照護套房",
+      detail: "專屬照護紀錄、優先回報",
+    },
+  ];
+  const groomingOptions: Array<{
+    id: GroomingService;
+    name: string;
+    description: string;
+    detail: string;
+  }> = [
+    {
+      id: "basic",
+      name: groomingNames.basic,
+      description: "日常清潔保養",
+      detail: "洗澡、吹整、基礎整理",
+    },
+    {
+      id: "styling",
+      name: groomingNames.styling,
+      description: "造型與修剪",
+      detail: "依毛孩體型與毛量調整",
+    },
+    {
+      id: "spa",
+      name: groomingNames.spa,
+      description: "深層護理",
+      detail: "適合皮毛保養與放鬆",
+    },
+  ];
+  const hasSchedule =
+    formData.serviceType === "accommodation"
+      ? Boolean(formData.startDate && formData.endDate) &&
+        new Date(formData.endDate) > new Date(formData.startDate)
+      : Boolean(formData.startDate && formData.scheduledTime);
+  const bookingStep = hasSchedule ? 4 : formData.petId ? 3 : 2;
+  const bookingSteps = [
+    { number: 1, label: "服務" },
+    { number: 2, label: "寵物" },
+    { number: 3, label: formData.serviceType === "accommodation" ? "房型" : "時段" },
+    { number: 4, label: "確認" },
+  ];
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -360,6 +443,8 @@ export default function Booking() {
             className="grid lg:grid-cols-3 gap-8 items-start"
           >
             <div className="lg:col-span-2 bg-white rounded-3xl shadow-lg border border-[#f0e6df] p-8">
+              <BookingProgress steps={bookingSteps} currentStep={bookingStep} />
+
               <div className="space-y-8">
                 <div>
                   <div className="flex items-center gap-2 mb-4">
@@ -415,27 +500,66 @@ export default function Booking() {
                     </button>
                   }
                 >
-                  <select
-                    value={formData.petId}
-                    onChange={(e) =>
-                      setFormData({ ...formData, petId: e.target.value })
-                    }
-                    className="input-soft"
-                    required
-                  >
-                    {pets.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}（{p.species} - {p.breed}
-                        {p.age ? `｜${p.age}歲` : ""}
-                        {p.weight ? `｜${p.weight}kg` : ""}）
-                      </option>
-                    ))}
-                  </select>
+                  <div className="grid gap-2.5 md:grid-cols-2">
+                    {pets.map((pet) => {
+                      const active = formData.petId === pet.id;
+                      const petMeta = [
+                        pet.age ? `${pet.age} 歲` : "",
+                        pet.weight ? `${pet.weight} kg` : "",
+                        pet.gender || "",
+                      ].filter(Boolean);
+
+                      return (
+                        <button
+                          key={pet.id}
+                          type="button"
+                          onClick={() =>
+                            setFormData({ ...formData, petId: pet.id })
+                          }
+                          className={`group rounded-2xl border px-3 py-3 text-left transition-all ${
+                            active
+                              ? "border-[#6b3a2a] bg-[#fdf6f0] shadow-md"
+                              : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:bg-[#fffaf6]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all ${
+                                active
+                                  ? "bg-[#6b3a2a] text-white"
+                                  : "bg-[#f3e4d7] text-[#6b3a2a]"
+                              }`}
+                            >
+                              <PawPrint className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="truncate text-sm text-[#3d1a0d]">
+                                  {pet.name}
+                                </p>
+                                {active && (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6b3a2a]" />
+                                )}
+                              </div>
+                              <p className="mt-0.5 truncate text-xs text-gray-500">
+                                {pet.species} / {pet.breed || "未填品種"}
+                              </p>
+                              {petMeta.length > 0 && (
+                                <p className="mt-1 truncate text-xs text-gray-400">
+                                  {petMeta.join(" / ")}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   <button
                     type="button"
                     onClick={() => navigate("/pets")}
-                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#fdf6f0] text-[#6b3a2a] text-sm hover:bg-[#f3e4d7] transition-all"
+                    className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#fdf6f0] px-3.5 py-2 text-sm text-[#6b3a2a] transition-all hover:bg-[#f3e4d7]"
                   >
                     <Plus className="w-4 h-4" />
                     新增或管理寵物
@@ -445,26 +569,69 @@ export default function Booking() {
                 {formData.serviceType === "accommodation" ? (
                   <>
                     <Field label="房型 *">
-                      <select
-                        value={formData.roomType}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            roomType: e.target.value as RoomType,
-                          })
-                        }
-                        className="input-soft"
-                      >
-                        <option value="standard">
-                          豪華單人房 - {priceText(serviceCatalog.roomPrices.standard)} / 晚
-                        </option>
-                        <option value="deluxe">
-                          舒適雙人房 - {priceText(serviceCatalog.roomPrices.deluxe)} / 晚
-                        </option>
-                        <option value="vip">
-                          VIP總統套房 - {priceText(serviceCatalog.roomPrices.vip)} / 晚
-                        </option>
-                      </select>
+                      <div className="grid gap-3">
+                        {roomOptions.map((room) => {
+                          const active = formData.roomType === room.id;
+
+                          return (
+                            <button
+                              key={room.id}
+                              type="button"
+                              onClick={() =>
+                                setFormData({
+                                  ...formData,
+                                  roomType: room.id,
+                                })
+                              }
+                              className={`rounded-3xl border p-4 text-left transition-all ${
+                                active
+                                  ? "border-[#6b3a2a] bg-[#fdf6f0] shadow-md"
+                                  : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:bg-[#fffaf6]"
+                              }`}
+                            >
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                                      active
+                                        ? "bg-[#6b3a2a] text-white"
+                                        : "bg-[#f3e4d7] text-[#6b3a2a]"
+                                    }`}
+                                  >
+                                    <Home className="h-6 w-6" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-base text-[#3d1a0d]">
+                                        {room.name}
+                                      </p>
+                                      {active && (
+                                        <CheckCircle2 className="h-4 w-4 text-[#6b3a2a]" />
+                                      )}
+                                    </div>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                      {room.description}
+                                    </p>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                      {room.detail}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex min-w-[10rem] items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 shadow-sm">
+                                  <p className="text-xs text-gray-500">
+                                    每晚
+                                  </p>
+                                  <p className="whitespace-nowrap text-lg text-[#6b3a2a]">
+                                    {priceText(
+                                      serviceCatalog.roomPrices[room.id],
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </Field>
 
                     <div className="grid md:grid-cols-2 gap-4">
@@ -504,27 +671,72 @@ export default function Booking() {
                 ) : (
                   <>
                     <Field label="美容服務 *">
-                      <select
-                        value={formData.groomingService}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            groomingService:
-                              e.target.value as GroomingService,
-                          })
-                        }
-                        className="input-soft"
-                      >
-                        <option value="basic">
-                          基礎洗澡護理 - {priceText(serviceCatalog.groomingPrices.basic)} 起
-                        </option>
-                        <option value="styling">
-                          造型剪毛設計 - {priceText(serviceCatalog.groomingPrices.styling)} 起
-                        </option>
-                        <option value="spa">
-                          SPA深層護理 - {priceText(serviceCatalog.groomingPrices.spa)} 起
-                        </option>
-                      </select>
+                      <div className="grid gap-3">
+                        {groomingOptions.map((service) => {
+                          const active =
+                            formData.groomingService === service.id;
+
+                          return (
+                            <button
+                              key={service.id}
+                              type="button"
+                              onClick={() =>
+                                setFormData({
+                                  ...formData,
+                                  groomingService: service.id,
+                                })
+                              }
+                              className={`rounded-3xl border p-4 text-left transition-all ${
+                                active
+                                  ? "border-[#b87868] bg-[#fff5f2] shadow-md"
+                                  : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:bg-[#fffaf6]"
+                              }`}
+                            >
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                                      active
+                                        ? "bg-[#b87868] text-white"
+                                        : "bg-[#f3e4d7] text-[#6b3a2a]"
+                                    }`}
+                                  >
+                                    <Scissors className="h-6 w-6" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-base text-[#3d1a0d]">
+                                        {service.name}
+                                      </p>
+                                      {active && (
+                                        <CheckCircle2 className="h-4 w-4 text-[#b87868]" />
+                                      )}
+                                    </div>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                      {service.description}
+                                    </p>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                      {service.detail}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
+                                  <p className="text-xs text-gray-500">
+                                    起
+                                  </p>
+                                  <p className="text-xl text-[#6b3a2a]">
+                                    {priceText(
+                                      serviceCatalog.groomingPrices[
+                                        service.id
+                                      ],
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </Field>
 
                     <Field label="預約日期 *">
@@ -575,6 +787,47 @@ export default function Booking() {
                   </>
                 )}
 
+                <Field label="加購服務">
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {addOnOptions.map((option) => {
+                      const checked = formData.addOnItems.includes(option.id);
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => toggleAddOn(option.id)}
+                          className={`rounded-3xl border p-4 text-left transition-all ${
+                            checked
+                              ? "border-[#6b3a2a] bg-[#fdf6f0] shadow-md"
+                              : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:bg-[#fff8f2]"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm text-[#3d1a0d]">
+                                {option.name}
+                              </p>
+                              <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                                {option.description}
+                              </p>
+                            </div>
+                            <span
+                              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs ${
+                                checked
+                                  ? "bg-[#6b3a2a] text-white"
+                                  : "bg-[#faf7f4] text-[#6b3a2a]"
+                              }`}
+                            >
+                              + {priceText(option.price)}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+
                 <Field label="備註">
                   <textarea
                     value={formData.notes}
@@ -610,7 +863,7 @@ export default function Booking() {
                   </p>
                 </div>
 
-                <div className="p-6 space-y-4">
+                <div className="space-y-4 p-6">
                   <Row
                     label="服務項目"
                     value={
@@ -636,14 +889,60 @@ export default function Booking() {
                     </>
                   )}
 
-                  <div className="border-t border-[#eadfd8] pt-5">
-                    <div className="flex justify-between items-end mb-6">
-                      <span className="text-gray-600">預估總金額</span>
-                      <span className="text-3xl text-[#6b3a2a]">
-                        NT$ {total().toLocaleString()}
+                  <div className="rounded-3xl border border-[#f0e6df] bg-[#fffaf6] p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm text-[#3d1a0d]">費用明細</p>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs text-gray-500">
+                        預估
                       </span>
                     </div>
+                    <div className="space-y-3">
+                      <PriceRow
+                        label={
+                          formData.serviceType === "accommodation"
+                            ? `${roomNames[formData.roomType]} x ${days()} 晚`
+                            : groomingNames[formData.groomingService]
+                        }
+                        value={priceText(baseAmount())}
+                      />
 
+                      {selectedAddOns.length > 0 ? (
+                        selectedAddOns.map((option) => (
+                          <PriceRow
+                            key={option.id}
+                            label={option.name}
+                            value={`+ ${priceText(option.price)}`}
+                            muted
+                          />
+                        ))
+                      ) : (
+                        <PriceRow label="加購服務" value="未加購" muted />
+                      )}
+
+                      <div className="border-t border-[#eadfd8] pt-3">
+                        <PriceRow
+                          label="加購小計"
+                          value={priceText(addOnTotal())}
+                          muted
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl bg-[#6b3a2a] px-5 py-6 text-center text-white shadow-lg">
+                    <p className="text-sm text-white/75">預估總金額</p>
+                    <div className="mt-2 flex items-baseline justify-center gap-2">
+                      <span className="text-2xl tracking-wide">NT$</span>
+                      <span className="text-5xl leading-none">
+                        {total().toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mx-auto mt-3 max-w-[15rem] text-xs leading-relaxed text-white/65">
+                      送出後由店務確認最終價格
+                    </p>
+                  </div>
+
+                  <div className="pt-1">
                     <button
                       type="submit"
                       className="w-full py-3 bg-[#6b3a2a] text-white rounded-full hover:bg-[#8b5040] transition-all shadow-lg"
@@ -705,6 +1004,62 @@ function EmptyState({
   );
 }
 
+function BookingProgress({
+  steps,
+  currentStep,
+}: {
+  steps: Array<{ number: number; label: string }>;
+  currentStep: number;
+}) {
+  return (
+    <div className="mb-8 rounded-2xl border border-[#f0e6df] bg-[#fffaf6] px-5 py-3">
+      <div className="flex justify-center">
+        <div className="inline-flex items-start">
+        {steps.map((step, index) => {
+          const completed = step.number < currentStep;
+          const active = step.number === currentStep;
+
+          return (
+            <div key={step.number} className="flex items-start">
+              <div className="flex w-14 flex-col items-center gap-1.5 sm:w-16">
+                <div
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs transition-all ${
+                    completed || active
+                      ? "border-[#6b3a2a] bg-[#6b3a2a] text-white"
+                      : "border-[#eadfd8] bg-white text-gray-400"
+                  }`}
+                >
+                  {completed ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    step.number
+                  )}
+                </div>
+                <span
+                  className={`text-xs ${
+                    completed || active ? "text-[#6b3a2a]" : "text-gray-400"
+                  }`}
+                >
+                  {step.label}
+                </span>
+              </div>
+
+              {index < steps.length - 1 && (
+                <div
+                  className={`mx-1 mt-3.5 h-px w-12 rounded-full sm:mx-2 sm:w-24 ${
+                    completed ? "bg-[#6b3a2a]" : "bg-[#eadfd8]"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Field({
   label,
   children,
@@ -730,6 +1085,35 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between text-sm">
       <span className="text-gray-500">{label}</span>
       <span className="text-gray-700">{value}</span>
+    </div>
+  );
+}
+
+function PriceRow({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <span
+        className={`min-w-0 leading-relaxed ${
+          muted ? "text-gray-500" : "text-[#3d1a0d]"
+        }`}
+      >
+        {label}
+      </span>
+      <span
+        className={`shrink-0 text-right leading-relaxed ${
+          muted ? "text-gray-500" : "font-medium text-[#6b3a2a]"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }

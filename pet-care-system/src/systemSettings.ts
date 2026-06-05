@@ -7,6 +7,15 @@ export type ServiceCatalog = {
   roomPrices: Record<RoomType, number>;
   groomingPrices: Record<GroomingService, number>;
   groomingTimes: string[];
+  addOnServices: Record<
+    string,
+    {
+      id: string;
+      name: string;
+      price: number;
+      description: string;
+    }
+  >;
 };
 
 export type BusinessSettings = {
@@ -42,6 +51,38 @@ export const defaultServiceCatalog: ServiceCatalog = {
     spa: 1800,
   },
   groomingTimes: ["09:00", "10:30", "13:00", "14:30", "16:00", "17:30"],
+  addOnServices: {
+    pickup: {
+      id: "pickup",
+      name: "到店接送",
+      price: 300,
+      description: "由店家協助定點接送毛孩。",
+    },
+    medication: {
+      id: "medication",
+      name: "餵藥與特殊照護",
+      price: 200,
+      description: "依家長交代協助用藥、觀察食慾與精神。",
+    },
+    care_report: {
+      id: "care_report",
+      name: "照片照護回報",
+      price: 150,
+      description: "服務期間提供照片與照護狀態回報。",
+    },
+    walk: {
+      id: "walk",
+      name: "散步加購",
+      price: 180,
+      description: "住宿或托育期間加一次散步活動。",
+    },
+    checkout_grooming: {
+      id: "checkout_grooming",
+      name: "退房前洗澡",
+      price: 500,
+      description: "住宿退房前協助基礎洗澡整理。",
+    },
+  },
 };
 
 export const defaultBusinessSettings: BusinessSettings = {
@@ -52,7 +93,7 @@ export const defaultBusinessSettings: BusinessSettings = {
 };
 
 export const defaultNotificationSettings: NotificationSettings = {
-  bookingReminderHours: 24,
+  bookingReminderHours: 72,
   paymentReminderHours: 12,
   careLogNotifyCustomer: true,
   channels: ["站內通知", "Email"],
@@ -87,6 +128,10 @@ export async function fetchPublicSystemSettings(): Promise<PublicSystemSettings>
       },
       groomingTimes:
         data.serviceCatalog?.groomingTimes || defaultServiceCatalog.groomingTimes,
+      addOnServices: {
+        ...defaultServiceCatalog.addOnServices,
+        ...data.serviceCatalog?.addOnServices,
+      },
     },
     businessSettings: {
       ...defaultBusinessSettings,

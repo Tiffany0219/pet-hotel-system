@@ -13,8 +13,8 @@ import {
   Calendar,
   Heart,
   RefreshCcw,
-  ImageIcon,
   Check,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -77,6 +77,12 @@ type Pet = {
   gender: string;
   notes: string;
   imageUrl?: string;
+  allergies?: string;
+  medicalNotes?: string;
+  vaccineDate?: string;
+  vetName?: string;
+  vetPhone?: string;
+  emergencyContact?: string;
 };
 
 type PetForm = {
@@ -88,6 +94,12 @@ type PetForm = {
   gender: string;
   notes: string;
   imageUrl: string;
+  allergies: string;
+  medicalNotes: string;
+  vaccineDate: string;
+  vetName: string;
+  vetPhone: string;
+  emergencyContact: string;
 };
 
 const initial: PetForm = {
@@ -99,6 +111,12 @@ const initial: PetForm = {
   gender: "公",
   notes: "",
   imageUrl: "/images/pets/dog-1.jpg",
+  allergies: "",
+  medicalNotes: "",
+  vaccineDate: "",
+  vetName: "",
+  vetPhone: "",
+  emergencyContact: "",
 };
 
 export default function Pets() {
@@ -233,6 +251,12 @@ export default function Pets() {
       weight: Number(pet.weight) || 0,
       gender: pet.gender,
       notes: pet.notes || "",
+      allergies: pet.allergies || "",
+      medicalNotes: pet.medicalNotes || "",
+      vaccineDate: pet.vaccineDate || "",
+      vetName: pet.vetName || "",
+      vetPhone: pet.vetPhone || "",
+      emergencyContact: pet.emergencyContact || "",
       imageUrl:
         pet.imageUrl ||
         (pet.species === "貓"
@@ -531,8 +555,109 @@ export default function Pets() {
                   </Field>
                 </div>
 
+                <div className="md:col-span-2 rounded-3xl border border-[#f0e6df] bg-[#fff8f2] p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#6b3a2a]">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg text-[#3d1a0d]">健康與緊急資訊</h3>
+                      <p className="text-xs text-gray-500">
+                        住宿、美容與照護師會優先查看這些資料。
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <Field label="過敏資訊">
+                      <input
+                        value={formData.allergies}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            allergies: e.target.value,
+                          })
+                        }
+                        className="input-soft bg-white"
+                        placeholder="例如：雞肉、牛肉、特定洗劑"
+                      />
+                    </Field>
+
+                    <Field label="疫苗日期">
+                      <input
+                        type="date"
+                        value={formData.vaccineDate}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            vaccineDate: e.target.value,
+                          })
+                        }
+                        className="input-soft bg-white"
+                      />
+                    </Field>
+
+                    <Field label="常用獸醫院">
+                      <input
+                        value={formData.vetName}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            vetName: e.target.value,
+                          })
+                        }
+                        className="input-soft bg-white"
+                        placeholder="例如：安心動物醫院"
+                      />
+                    </Field>
+
+                    <Field label="獸醫院電話">
+                      <input
+                        value={formData.vetPhone}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            vetPhone: e.target.value,
+                          })
+                        }
+                        className="input-soft bg-white"
+                        placeholder="例如：02-1234-5678"
+                      />
+                    </Field>
+
+                    <Field label="緊急聯絡人">
+                      <input
+                        value={formData.emergencyContact}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            emergencyContact: e.target.value,
+                          })
+                        }
+                        className="input-soft bg-white"
+                        placeholder="例如：王小明 0912-000-000"
+                      />
+                    </Field>
+
+                    <Field label="疾病史 / 用藥需求">
+                      <textarea
+                        value={formData.medicalNotes}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            medicalNotes: e.target.value,
+                          })
+                        }
+                        className="input-soft bg-white"
+                        rows={3}
+                        placeholder="例如：心臟病、皮膚敏感、每日晚餐後吃藥"
+                      />
+                    </Field>
+                  </div>
+                </div>
+
                 <div className="md:col-span-2">
-                  <Field label="備註（過敏、特殊需求等）">
+                  <Field label="個性 / 照護備註">
                     <textarea
                       value={formData.notes}
                       onChange={(e) =>
@@ -543,7 +668,7 @@ export default function Pets() {
                       }
                       className="input-soft"
                       rows={4}
-                      placeholder="例如：對雞肉過敏、怕打雷、需要特別照顧等"
+                      placeholder="例如：怕打雷、怕陌生人、喜歡慢慢接近等"
                     />
                   </Field>
                 </div>
@@ -681,6 +806,26 @@ export default function Pets() {
                           <p className="text-sm text-gray-700 leading-relaxed">
                             {pet.notes}
                           </p>
+                        </div>
+                      )}
+
+                      {(pet.allergies ||
+                        pet.medicalNotes ||
+                        pet.vaccineDate ||
+                        pet.emergencyContact) && (
+                        <div className="mb-5 rounded-2xl border border-[#f0e6df] bg-[#fbfff8] p-4">
+                          <p className="mb-2 flex items-center gap-1 text-xs text-[#6b3a2a]">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            健康提醒
+                          </p>
+                          <div className="space-y-1 text-sm text-gray-700">
+                            {pet.allergies && <p>過敏：{pet.allergies}</p>}
+                            {pet.medicalNotes && <p>照護：{pet.medicalNotes}</p>}
+                            {pet.vaccineDate && <p>疫苗：{pet.vaccineDate}</p>}
+                            {pet.emergencyContact && (
+                              <p>緊急聯絡：{pet.emergencyContact}</p>
+                            )}
+                          </div>
                         </div>
                       )}
 

@@ -81,6 +81,40 @@ export default function Notifications() {
     }
   }
 
+  async function respondBooking(notification: NotificationItem, confirmed: boolean) {
+    if (!notification.orderId) {
+      toast.error("找不到對應訂單");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${API_BASE}/orders/${notification.orderId}/reconfirm`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ confirmed }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.message || "預約確認失敗");
+        return;
+      }
+
+      toast.success(data.message || (confirmed ? "已確認預約" : "已取消預約"));
+      await loadNotifications();
+    } catch (error) {
+      console.error(error);
+      toast.error("預約確認失敗");
+    }
+  }
+
   const visibleNotifications = useMemo(() => {
     if (filter === "unread") {
       return notifications.filter((item) => !item.read);
@@ -157,6 +191,9 @@ export default function Notifications() {
           <div className="space-y-3">
             {visibleNotifications.map((notification) => {
               const isAlert = notification.type === "alert";
+              const isBookingReconfirm =
+                notification.type === "booking_reconfirm" && !notification.read;
+
               return (
                 <article
                   key={notification.id}
@@ -195,6 +232,24 @@ export default function Notifications() {
                       <p className="mt-3 text-xs text-[#9c7060]">
                         {new Date(notification.createdAt).toLocaleString()}
                       </p>
+                      {isBookingReconfirm && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => respondBooking(notification, true)}
+                            className="rounded-full bg-[#6b3a2a] px-4 py-2 text-sm text-white hover:bg-[#8b5040]"
+                          >
+                            確認要預約
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => respondBooking(notification, false)}
+                            className="rounded-full border border-[#b87868] px-4 py-2 text-sm text-[#b87868] hover:bg-[#fff5f2]"
+                          >
+                            不預約，釋出位置
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {!notification.read && (
                       <button

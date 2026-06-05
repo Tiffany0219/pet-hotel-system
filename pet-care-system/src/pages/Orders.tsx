@@ -38,6 +38,8 @@ interface Order {
   careLogs?: CareLog[];
   cancelReason?: string;
   total: number;
+  addOnItems?: { id: string; name: string; price: number }[];
+  addOnTotal?: number;
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -208,6 +210,34 @@ export default function Orders() {
     }
   }
 
+  async function handleReconfirm(orderId: string, confirmed: boolean) {
+    try {
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(`${API_BASE}/orders/${orderId}/reconfirm`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ confirmed }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.message || "預約確認失敗");
+        return;
+      }
+
+      toast.success(data.message || (confirmed ? "已確認預約" : "已取消預約"));
+      fetchOrders();
+    } catch (error) {
+      console.error(error);
+      toast.error("預約確認失敗");
+    }
+  }
+
   async function handleReviewSubmit(orderId: string) {
     try {
       const token = localStorage.getItem("token");
@@ -329,6 +359,7 @@ export default function Orders() {
     const map: Record<string, string> = {
       待確認: "bg-[#fff8f2] text-[#b87868]",
       已確認: "bg-[#f7fbff] text-[#6f9fc2]",
+      待會員確認: "bg-[#fff8e8] text-[#a97922]",
       進行中: "bg-[#fdf6f0] text-[#6b3a2a]",
       已完成: "bg-[#f3f7f3] text-[#5f8a5f]",
       已取消: "bg-[#fff0f0] text-[#b85c38]",
@@ -526,6 +557,7 @@ export default function Orders() {
                     paymentClass={getPaymentBadge(order.paymentStatus)}
                     onPay={setPayOrderId}
                     onCancel={setCancelOrderId}
+                    onReconfirm={handleReconfirm}
                     onDetail={(id) => navigate(`/orders/${id}`)}
                     showActions
                   />
@@ -712,6 +744,7 @@ function OrderCard({
   paymentClass,
   onPay,
   onCancel,
+  onReconfirm,
   onDetail,
   showActions,
 }: {
@@ -721,6 +754,7 @@ function OrderCard({
   paymentClass: string;
   onPay: (id: string) => void;
   onCancel: (id: string) => void;
+  onReconfirm: (id: string, confirmed: boolean) => void;
   onDetail: (id: string) => void;
   showActions?: boolean;
 }) {
@@ -804,6 +838,18 @@ function OrderCard({
           </div>
         )}
 
+        {order.addOnItems && order.addOnItems.length > 0 && (
+          <div className="rounded-2xl bg-[#fff8f2] p-4 mb-5 border border-[#f0e6df]">
+            <p className="text-sm text-[#6b3a2a] mb-2">加購服務</p>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {order.addOnItems.map((item) => item.name).join("、")}
+              <span className="ml-2 text-[#b87868]">
+                + NT$ {(order.addOnTotal || 0).toLocaleString()}
+              </span>
+            </p>
+          </div>
+        )}
+
         {order.careLogs && order.careLogs.length > 0 && (
           <div className="rounded-2xl bg-[#f7fbff] p-4 mb-5 border border-[#d9eaf5]">
             <div className="flex items-center gap-2 mb-3">
@@ -849,8 +895,33 @@ function OrderCard({
 
         {showActions && (
           <div className="flex flex-wrap gap-3">
+            {order.status === "待會員確認" && (
+              <div className="w-full rounded-2xl border border-[#f1d58a] bg-[#fff8e8] p-4">
+                <p className="mb-3 text-sm text-[#8a611b]">
+                  請於預約前確認是否仍要保留此預約；若不前往，系統會取消並釋出位置。
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onReconfirm(order.id, true)}
+                    className="rounded-full bg-[#6b3a2a] px-5 py-2.5 text-sm text-white hover:bg-[#8b5040]"
+                  >
+                    確認要預約
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReconfirm(order.id, false)}
+                    className="rounded-full border border-[#b87868] px-5 py-2.5 text-sm text-[#b87868] hover:bg-[#fff5f2]"
+                  >
+                    不預約，釋出位置
+                  </button>
+                </div>
+              </div>
+            )}
+
             {order.paymentStatus !== "已付款" &&
-              order.status !== "已取消" && (
+              order.status !== "已取消" &&
+              order.status !== "待會員確認" && (
                 <button
                   onClick={() => onPay(order.id)}
                   className="px-5 py-2.5 rounded-full bg-[#6b3a2a] text-white hover:bg-[#8b5040] transition-all"
@@ -859,7 +930,9 @@ function OrderCard({
                 </button>
               )}
 
-            {(order.status === "待確認" || order.status === "已確認") && (
+            {(order.status === "待確認" ||
+              order.status === "已確認" ||
+              order.status === "待會員確認") && (
               <button
                 onClick={() => onCancel(order.id)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[#b87868] text-[#b87868] hover:bg-[#fff5f2] transition-all"

@@ -420,6 +420,20 @@ button:disabled {
   }
 }
 
+@keyframes heroImageDrift {
+  0% {
+    transform: scale(1.03) translateX(0);
+  }
+
+  50% {
+    transform: scale(1.08) translateX(-8px);
+  }
+
+  100% {
+    transform: scale(1.05) translateX(6px);
+  }
+}
+
 .hero-title-animate {
   animation: fadeSlideIn 0.9s ease-out both;
 }
@@ -439,6 +453,10 @@ button:disabled {
 
 .hero-card-animate {
   animation: cardFloatStrong 3.2s ease-in-out infinite;
+}
+
+.hero-carousel-image {
+  animation: heroImageDrift 5.2s ease-in-out infinite alternate;
 }
 
 .hero-paw-animate {

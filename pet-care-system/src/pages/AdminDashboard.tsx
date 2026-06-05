@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Clock,
   CheckCircle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -72,6 +73,12 @@ type Order = {
     gender: string;
     notes: string;
     imageUrl?: string;
+    allergies?: string;
+    medicalNotes?: string;
+    vaccineDate?: string;
+    vetName?: string;
+    vetPhone?: string;
+    emergencyContact?: string;
   } | null;
   serviceType: ServiceType;
   roomType?: RoomType | null;
@@ -84,6 +91,8 @@ type Order = {
   careLogs?: CareLog[];
   auditLogs?: AuditLog[];
   total: number;
+  addOnItems?: { id: string; name: string; price: number }[];
+  addOnTotal?: number;
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -240,7 +249,7 @@ function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-const statusOptions = ["待確認", "已確認", "進行中", "已完成", "已取消"];
+const statusOptions = ["待確認", "已確認", "待會員確認", "進行中", "已完成", "已取消"];
 const paymentStatusOptions = ["未付款", "已付訂金", "已付款"];
 const paymentMethodOptions = ["未設定", "現金", "轉帳", "信用卡", "線上付款", "現場付款", "其他"];
 const serviceOptions = [
@@ -300,7 +309,7 @@ const defaultBusinessSettings: BusinessSettings = {
 };
 
 const defaultNotificationSettings: NotificationSettings = {
-  bookingReminderHours: 24,
+  bookingReminderHours: 72,
   paymentReminderHours: 12,
   careLogNotifyCustomer: true,
   channels: ["站內通知", "Email"],
@@ -720,7 +729,7 @@ export default function AdminDashboard() {
         (order) =>
           order.status !== "已取消" &&
           order.paymentStatus !== "已付款" &&
-          ["待確認", "已確認", "進行中"].includes(order.status)
+          ["待確認", "已確認", "待會員確認", "進行中"].includes(order.status)
       ),
     [sortedOrders]
   );
@@ -842,6 +851,7 @@ export default function AdminDashboard() {
     const statusColors: Record<string, string> = {
       待確認: "#b87868",
       已確認: "#6f9fc2",
+      待會員確認: "#c8a15f",
       進行中: "#6b3a2a",
       已完成: "#5f8a5f",
       已取消: "#b85c68",
@@ -1564,7 +1574,7 @@ function FrontDeskWorkspace({
         onPickOrder={pickOrder}
       />
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_400px]">
+      <section className="grid gap-6 xl:grid-cols-[1fr_420px]">
         <div className="space-y-4">
           <DeskQueue
             title="今日入住"
@@ -1587,28 +1597,42 @@ function FrontDeskWorkspace({
         </div>
 
         <aside className="space-y-4">
-          <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 p-4">
-              <div className="flex items-center gap-2">
-                <Phone className="h-5 w-5 text-[#6f9fc2]" />
-                <h3 className="text-lg text-[#202124]">聯絡與交班</h3>
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="bg-gradient-to-br from-[#f7fbff] to-white p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#6f9fc2] shadow-sm">
+                      <Phone className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-lg text-[#202124]">聯絡與交班</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        記錄客戶通知與班別交接事項。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-xs text-gray-500 shadow-sm">
+                  今日追蹤
+                </span>
               </div>
-              <p className="mt-1 text-sm text-gray-500">
-                追蹤客戶通知與班別交接事項。
-              </p>
             </div>
-            <div className="p-4">
+            <div className="space-y-4 p-5">
               {activeOrder ? (
                 <>
                 <button
                   type="button"
                   onClick={() => onSelectOrder(activeOrder.id)}
-                  className="w-full rounded-lg border border-gray-200 bg-[#f7f8fa] p-3 text-left hover:bg-[#eef3f6]"
+                  className="w-full rounded-2xl border border-gray-200 bg-[#f7f8fa] p-4 text-left transition hover:border-[#6f9fc2] hover:bg-[#f3f8fc]"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm text-[#202124]">
-                      #{activeOrder.id} {activeOrder.petName}
-                    </p>
+                    <div>
+                      <p className="text-sm text-gray-500">目前選取訂單</p>
+                      <p className="mt-1 text-base text-[#202124]">
+                        #{activeOrder.id} {activeOrder.petName}
+                      </p>
+                    </div>
                     <span className={`rounded-full px-2.5 py-1 text-xs ${statusBadge(activeOrder.status)}`}>
                       {activeOrder.status}
                     </span>
@@ -1617,39 +1641,29 @@ function FrontDeskWorkspace({
                     {activeOrder.userName} / {serviceName(activeOrder)} / {assignmentSummary(activeOrder)}
                   </p>
                 </button>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <select
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <InlineSelect
                     value={contact.channel}
-                    onChange={(event) => setContact((current) => ({ ...current, channel: event.target.value }))}
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
-                  >
-                    <option>電話</option>
-                    <option>LINE</option>
-                    <option>Email</option>
-                    <option>現場</option>
-                  </select>
-                  <select
+                    options={["電話", "LINE", "Email", "現場"]}
+                    onChange={(value) => setContact((current) => ({ ...current, channel: value }))}
+                  />
+                  <InlineSelect
                     value={contact.result}
-                    onChange={(event) => setContact((current) => ({ ...current, result: event.target.value }))}
-                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
-                  >
-                    <option>已聯絡</option>
-                    <option>未接</option>
-                    <option>已留言</option>
-                    <option>客戶回覆</option>
-                  </select>
+                    options={["已聯絡", "未接", "已留言", "客戶回覆"]}
+                    onChange={(value) => setContact((current) => ({ ...current, result: value }))}
+                  />
                 </div>
                 <textarea
                   value={contact.note}
                   onChange={(event) => setContact((current) => ({ ...current, note: event.target.value }))}
                   rows={3}
-                  className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-2xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#6f9fc2]"
                   placeholder="例如：已電話提醒明天入住，家長表示 18:00 抵達。"
                 />
                 <button
                   type="button"
                   onClick={saveContact}
-                  className="mt-2 w-full rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white hover:bg-[#34373b]"
+                  className="w-full rounded-2xl bg-[#202124] px-4 py-3 text-sm text-white transition hover:bg-[#34373b]"
                 >
                   新增聯絡紀錄
                 </button>
@@ -1657,22 +1671,23 @@ function FrontDeskWorkspace({
                   value={handoverNote}
                   onChange={(event) => setHandoverNote(event.target.value)}
                   rows={2}
-                  className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-2xl border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#6f9fc2]"
                   placeholder="交班備註：晚班需要追蹤的事情"
                 />
                 <button
                   type="button"
                   onClick={saveHandover}
-                  className="mt-2 w-full rounded-lg border border-[#202124] px-4 py-2.5 text-sm text-[#202124] hover:bg-gray-50"
+                  className="w-full rounded-2xl border border-[#202124] px-4 py-3 text-sm text-[#202124] transition hover:bg-gray-50"
                 >
                   新增交班備註
                 </button>
-                  <div className="mt-4 space-y-2">
+                  <div className="space-y-2 border-t border-gray-100 pt-2">
+                    <p className="text-xs text-gray-500">最近紀錄</p>
                     {recentAuditLogs.length === 0 ? (
                       <EmptyNote text="目前沒有聯絡或交班紀錄" />
                     ) : (
                       recentAuditLogs.map((log) => (
-                        <div key={log.id} className="rounded-lg bg-[#f7f8fa] p-3">
+                        <div key={log.id} className="rounded-2xl bg-[#f7f8fa] p-3">
                           <p className="text-xs text-gray-500">
                             {log.action} / {new Date(log.createdAt).toLocaleString()}
                           </p>
@@ -1691,21 +1706,25 @@ function FrontDeskWorkspace({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 p-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-[#6f9fc2]" />
-              <h3 className="text-lg text-[#202124]">會員快速查詢</h3>
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 bg-gradient-to-br from-white to-[#f7fbff] p-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#6f9fc2] shadow-sm">
+                <Users className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-lg text-[#202124]">會員快速查詢</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  搜尋會員後可直接帶入右側快速預約。
+                </p>
+              </div>
             </div>
-            <p className="mt-1 text-sm text-gray-500">
-              搜尋會員後可直接帶入右側快速預約。
-            </p>
           </div>
-          <div className="p-4">
+          <div className="p-5">
             <input
               value={memberQuery}
               onChange={(event) => setMemberQuery(event.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#6f9fc2]"
               placeholder="輸入姓名、電話、Email 或寵物名"
             />
             <div className="mt-3 max-h-[360px] space-y-2 overflow-auto pr-1">
@@ -1724,7 +1743,7 @@ function FrontDeskWorkspace({
                     setBookingMemberQuery(member.name);
                     setBooking((current) => ({ ...current, memberMode: "existing" }));
                   }}
-                  className={`w-full rounded-lg border p-3 text-left transition ${
+                  className={`w-full rounded-2xl border p-3 text-left transition ${
                     selectedMemberId === member.id
                       ? "border-[#6f9fc2] bg-[#f7fbff]"
                       : "border-gray-200 hover:bg-gray-50"
@@ -1749,17 +1768,19 @@ function FrontDeskWorkspace({
           </div>
         </section>
 
-        <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-br from-white to-[#f7fbff] p-5">
             <div>
               <h3 className="text-lg text-[#202124]">櫃檯快速預約</h3>
               <p className="mt-1 text-sm text-gray-500">支援電話預約、現場新客與既有會員代訂。</p>
             </div>
-            <CalendarDays className="h-5 w-5 text-[#6f9fc2]" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#6f9fc2] shadow-sm">
+              <CalendarDays className="h-5 w-5" />
+            </span>
           </div>
 
-          <div className="p-4">
-          <div className="mb-4 flex rounded-lg bg-[#f7f8fa] p-1">
+          <div className="p-5">
+          <div className="mb-4 flex rounded-2xl bg-[#f7f8fa] p-1">
             {[
               { value: "existing", label: "既有會員" },
               { value: "new", label: "現場新客" },
@@ -1768,7 +1789,7 @@ function FrontDeskWorkspace({
                 key={mode.value}
                 type="button"
                 onClick={() => setBooking((current) => ({ ...current, memberMode: mode.value }))}
-                className={`flex-1 rounded-md px-3 py-2 text-sm ${
+                className={`flex-1 rounded-xl px-3 py-2 text-sm ${
                   booking.memberMode === mode.value
                     ? "bg-white text-[#202124] shadow-sm"
                     : "text-gray-500"
@@ -1924,39 +1945,62 @@ function DeskQueue({
   onAction: (id: string) => void;
   onPick: (order: Order) => void;
 }) {
+  const accentClass = title.includes("入住")
+    ? "bg-[#eef7ff] text-[#3f789f]"
+    : "bg-[#eef7ef] text-[#4f7f55]";
+
   return (
-    <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-      <SectionHeader
-        title={title}
-        caption={`${orders.length} 筆待處理`}
-        icon={<ClipboardList className="h-5 w-5" />}
-      />
-      <div className="divide-y divide-gray-100">
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4">
+        <div>
+          <h3 className="text-xl text-[#202124]">{title}</h3>
+          <p className="mt-1 text-sm text-gray-500">{orders.length} 筆待處理</p>
+        </div>
+        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${accentClass}`}>
+          <ClipboardList className="h-5 w-5" />
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4">
         {orders.length === 0 ? (
-          <div className="p-4">
-            <EmptyNote text={emptyText} />
-          </div>
+          <EmptyNote text={emptyText} />
         ) : (
           orders.map((order) => (
-            <div key={order.id} className="grid gap-3 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div
+              key={order.id}
+              className="grid gap-3 rounded-2xl border border-gray-100 bg-[#fbfcfd] p-4 transition hover:border-[#cddfec] hover:bg-white lg:grid-cols-[1fr_auto] lg:items-center"
+            >
               <button
                 type="button"
                 onClick={() => onPick(order)}
                 className="text-left"
               >
-                <p className="text-sm text-[#202124]">#{order.id} {order.petName || "未提供"} / {order.userName}</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {serviceName(order)} / {dateRange(order)} / {assignmentSummary(order)}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {paymentSummary(order)}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs text-gray-500">
+                    #{order.id}
+                  </span>
+                  <p className="text-base text-[#202124]">
+                    {order.petName || "未提供"} / {order.userName}
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-gray-500 sm:grid-cols-3">
+                  <span className="rounded-xl bg-white px-3 py-2">
+                    {serviceName(order)}
+                  </span>
+                  <span className="rounded-xl bg-white px-3 py-2">
+                    {dateRange(order)}
+                  </span>
+                  <span className="rounded-xl bg-white px-3 py-2">
+                    {assignmentSummary(order)}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">{paymentSummary(order)}</p>
               </button>
               <button
                 type="button"
                 disabled={updatingId === order.id}
                 onClick={() => onAction(order.id)}
-                className="rounded-lg bg-[#202124] px-4 py-2 text-sm text-white hover:bg-[#34373b] disabled:opacity-60"
+                className="rounded-2xl bg-[#202124] px-5 py-3 text-sm text-white transition hover:bg-[#34373b] disabled:opacity-60"
               >
                 {updatingId === order.id ? "處理中..." : actionLabel}
               </button>
@@ -1988,8 +2032,8 @@ function FrontDeskTaskBoard({
 }) {
   return (
     <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 p-4">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 bg-gradient-to-br from-white to-[#f7fbff] p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg text-[#202124]">櫃檯今日流程</h3>
@@ -1997,24 +2041,24 @@ function FrontDeskTaskBoard({
                 依時段整理今日入住、退房、美容與待確認項目。
               </p>
             </div>
-            <CalendarDays className="h-5 w-5 text-[#6f9fc2]" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#6f9fc2] shadow-sm">
+              <CalendarDays className="h-5 w-5" />
+            </span>
           </div>
         </div>
 
-        <div className="divide-y divide-gray-100">
+        <div className="space-y-3 p-4">
           {timelineOrders.length === 0 ? (
-            <div className="p-4">
-              <EmptyNote text="目前沒有今日流程項目" />
-            </div>
+            <EmptyNote text="目前沒有今日流程項目" />
           ) : (
             timelineOrders.map((order) => (
               <button
                 key={order.id}
                 type="button"
                 onClick={() => onPickOrder(order)}
-                className="grid w-full gap-3 p-4 text-left hover:bg-[#fbfcfd] sm:grid-cols-[88px_1fr_auto] sm:items-center"
+                className="grid w-full gap-3 rounded-2xl border border-gray-100 bg-[#fbfcfd] p-4 text-left transition hover:border-[#cddfec] hover:bg-white sm:grid-cols-[88px_1fr_auto] sm:items-center"
               >
-                <div className="rounded-lg bg-[#f7f8fa] px-3 py-2 text-center">
+                <div className="rounded-2xl bg-white px-3 py-2 text-center shadow-sm">
                   <p className="text-xs text-gray-500">時間</p>
                   <p className="mt-1 text-sm text-[#202124]">
                     {order.scheduledTime || (order.serviceType === "accommodation" ? "住宿" : "-")}
@@ -2056,18 +2100,20 @@ function FrontDeskTaskBoard({
           />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-lg text-[#202124]">優先處理</h3>
               <p className="mt-1 text-sm text-gray-500">櫃檯交接前先清這些項目。</p>
             </div>
-            <AlertTriangle className="h-5 w-5 text-[#b87868]" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff0f0] text-[#b87868]">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
           </div>
 
           <div className="space-y-3">
             {taskGroups.map((group) => (
-              <div key={group.title} className="rounded-lg border border-gray-100 bg-[#fbfcfd] p-3">
+              <div key={group.title} className="rounded-2xl border border-gray-100 bg-[#fbfcfd] p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm text-[#202124]">{group.title}</p>
@@ -2080,7 +2126,7 @@ function FrontDeskTaskBoard({
 
                 <div className="mt-3 space-y-2">
                   {group.orders.length === 0 ? (
-                    <p className="rounded-lg bg-white px-3 py-2 text-xs text-gray-500">
+                    <p className="rounded-xl bg-white px-3 py-2 text-xs text-gray-500">
                       目前沒有項目
                     </p>
                   ) : (
@@ -2089,7 +2135,7 @@ function FrontDeskTaskBoard({
                         key={order.id}
                         type="button"
                         onClick={() => onPickOrder(order)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left hover:bg-[#eef3f6]"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-left transition hover:bg-[#eef3f6]"
                       >
                         <span className="min-w-0">
                           <span className="block truncate text-sm text-[#202124]">
@@ -2125,15 +2171,70 @@ function FrontDeskMiniStat({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-gray-500">{label}</p>
           <p className="mt-2 text-2xl text-[#202124]">{value}</p>
           <p className="mt-2 text-xs text-gray-500">{helper}</p>
         </div>
-        <div className="rounded-lg bg-[#edf6fc] p-2 text-[#3f789f]">{icon}</div>
+        <div className="rounded-2xl bg-[#edf6fc] p-2 text-[#3f789f]">{icon}</div>
       </div>
+    </div>
+  );
+}
+
+function InlineSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 w-full appearance-none rounded-2xl border border-[#eaded6] bg-[#fffaf7] px-4 pr-10 text-sm font-semibold text-[#5b392d] shadow-[0_8px_20px_rgba(80,53,42,0.06)] outline-none transition hover:border-[#c9ab9d] hover:bg-white focus:border-[#7b3f2d] focus:bg-white focus:ring-4 focus:ring-[#f4ebe5]"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9b7b6f]" />
+    </div>
+  );
+}
+
+function StyledSelect({
+  value,
+  onChange,
+  children,
+  disabled = false,
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 w-full appearance-none rounded-2xl border border-[#eaded6] bg-[#fffaf7] px-4 pr-10 text-sm font-semibold text-[#5b392d] shadow-[0_8px_20px_rgba(80,53,42,0.06)] outline-none transition hover:border-[#c9ab9d] hover:bg-white focus:border-[#7b3f2d] focus:bg-white focus:ring-4 focus:ring-[#f4ebe5] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9b7b6f]" />
     </div>
   );
 }
@@ -2148,24 +2249,27 @@ function SelectField({
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="text-xs text-gray-500">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
-      >
-        {options.map((option) => (
-          <option key={`${label}-${option.value}`} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
+  }) {
+    return (
+      <label className="block">
+        <span className="text-xs font-semibold text-slate-500">{label}</span>
+        <div className="relative mt-1">
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-12 w-full appearance-none rounded-2xl border border-slate-200 bg-[#fbfcfd] px-4 pr-11 text-sm font-semibold text-slate-800 outline-none transition hover:border-[#d7c8bd] focus:border-[#7b3f2d] focus:bg-white focus:ring-4 focus:ring-[#f4ebe5]"
+          >
+            {options.map((option) => (
+              <option key={`${label}-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        </div>
+      </label>
+    );
+  }
 
 function SmallInput({
   label,
@@ -2185,7 +2289,7 @@ function SmallInput({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#6f9fc2]"
       />
     </label>
   );
@@ -2366,7 +2470,7 @@ function TodayWorkspace({
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <SectionHeader
             title="當日預約時窗"
             caption="依開始時間排序，方便櫃檯確認報到與人力配置。"
@@ -2417,7 +2521,7 @@ function TodayWorkspace({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <h3 className="text-lg text-[#202124]">當日營運重點</h3>
             <div className="mt-4 space-y-3">
               <PriorityNotice
@@ -2441,7 +2545,7 @@ function TodayWorkspace({
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <h3 className="text-lg text-[#202124]">包套資格即將到期</h3>
             <PriorityNotice
               tone="gold"
@@ -2452,7 +2556,7 @@ function TodayWorkspace({
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg text-[#202124]">營運統計報表</h2>
@@ -2486,7 +2590,7 @@ function TodayWorkspace({
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg text-[#202124]">資料匯出</h2>
@@ -2536,7 +2640,7 @@ function TodayWorkspace({
         </div>
 
         <aside className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <SectionHeader
               title="當日任務清單"
               caption="店務人員每日處理重點"
@@ -2588,7 +2692,7 @@ function TodayWorkspace({
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <SectionHeader
               title="尚未安排"
               caption={`${unassignedOrders.length} 筆需要指定位置`}
@@ -2618,7 +2722,7 @@ function TodayWorkspace({
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <SectionHeader
               title="付款提醒"
               caption={`${unpaidOrders.length} 筆待收款或尾款`}
@@ -2740,7 +2844,7 @@ function AnalyticsWorkspace({
           <DonutChart data={dashboardCharts.service} centerLabel="本期服務" />
         </ChartPanel>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="text-lg text-[#202124]">服務排行</h3>
           <div className="mt-4 overflow-hidden rounded-lg border border-gray-100">
             <table className="w-full text-left text-sm">
@@ -2772,7 +2876,7 @@ function AnalyticsWorkspace({
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="text-lg text-[#202124]">經營摘要</h3>
           <div className="mt-4 space-y-3">
             <SummaryLine label="主力服務" value={reportMetrics.popularService} />
@@ -2785,7 +2889,7 @@ function AnalyticsWorkspace({
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg text-[#202124]">第一期 10 大經營指標</h3>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {firstLineMetrics.map((metric) => (
@@ -2847,7 +2951,7 @@ function RoomManagement({
           return (
             <div
               key={roomType}
-              className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden"
+              className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden"
             >
               <div className="border-b border-gray-200 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -3052,47 +3156,66 @@ function StaffingWorkspace({
       </section>
 
       {isSystemAdmin && (
-        <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="text-lg text-[#202124]">新增排班</h3>
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_1fr_auto]">
-            <SelectField
-              label="員工"
-              value={form.userId}
-              onChange={(value) => setForm((current) => ({ ...current, userId: value }))}
-              options={users.map((item) => ({
-                value: item.id,
-                label: `${item.name} / ${systemRoleNames[item.role]}`,
-              }))}
-            />
-            <SmallInput
-              type="date"
-              label="日期"
-              value={form.workDate}
-              onChange={(value) => setForm((current) => ({ ...current, workDate: value }))}
-            />
-            <SmallInput
-              label="班別"
-              value={form.shiftLabel}
-              onChange={(value) => setForm((current) => ({ ...current, shiftLabel: value }))}
-            />
-            <SmallInput
-              label="備註"
-              value={form.note}
-              onChange={(value) => setForm((current) => ({ ...current, note: value }))}
-            />
-            <button
-              type="button"
-              disabled={saving}
-              onClick={createShift}
-              className="self-end rounded-lg bg-[#202124] px-4 py-2.5 text-sm text-white disabled:opacity-60"
-            >
-              新增
-            </button>
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[260px_1fr]">
+            <div className="bg-gradient-to-br from-[#f7fbff] to-white p-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#6f9fc2] shadow-sm">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <h3 className="mt-4 text-xl text-[#202124]">新增排班</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                選擇員工、日期與班別，排班會同步出現在工作人員的工作台。
+              </p>
+            </div>
+
+            <div className="p-5">
+              <div className="grid gap-3 lg:grid-cols-[1.2fr_170px_220px]">
+                <SelectField
+                  label="員工"
+                  value={form.userId}
+                  onChange={(value) => setForm((current) => ({ ...current, userId: value }))}
+                  options={users.map((item) => ({
+                    value: item.id,
+                    label:
+                      item.name === systemRoleNames[item.role]
+                        ? `${systemRoleNames[item.role]} ・ ${item.email}`
+                        : `${item.name} ・ ${systemRoleNames[item.role]}`,
+                  }))}
+                />
+                <SmallInput
+                  type="date"
+                  label="日期"
+                  value={form.workDate}
+                  onChange={(value) => setForm((current) => ({ ...current, workDate: value }))}
+                />
+                <SmallInput
+                  label="班別"
+                  value={form.shiftLabel}
+                  onChange={(value) => setForm((current) => ({ ...current, shiftLabel: value }))}
+                />
+              </div>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_150px] lg:items-end">
+                <SmallInput
+                  label="備註"
+                  value={form.note}
+                  onChange={(value) => setForm((current) => ({ ...current, note: value }))}
+                />
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={createShift}
+                  className="rounded-2xl bg-[#202124] px-5 py-3 text-sm text-white transition hover:bg-[#34373b] disabled:opacity-60"
+                >
+                  {saving ? "新增中..." : "新增排班"}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       )}
 
-      <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <SectionHeader
           title="排班總覽"
           caption={loading ? "正在讀取..." : `${shifts.length} 筆排班`}
@@ -3109,7 +3232,7 @@ function StaffingWorkspace({
                 <h3 className="text-lg text-[#202124]">{date}</h3>
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   {dateShifts.map((shift) => (
-                    <div key={shift.id} className="rounded-lg border border-gray-200 bg-[#fbfcfd] p-4">
+                    <div key={shift.id} className="rounded-2xl border border-gray-200 bg-[#fbfcfd] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm text-[#202124]">
@@ -3127,7 +3250,7 @@ function StaffingWorkspace({
                             type="button"
                             disabled={saving}
                             onClick={() => deleteShift(shift.id)}
-                            className="rounded-lg border border-[#b85c68] px-3 py-1.5 text-xs text-[#b85c68] hover:bg-[#fff0f0]"
+                            className="rounded-xl border border-[#b85c68] px-3 py-1.5 text-xs text-[#b85c68] hover:bg-[#fff0f0]"
                           >
                             刪除
                           </button>
@@ -3419,7 +3542,7 @@ function SettingsPanel({
         </div>
       ) : null}
 
-      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div>
           <h3 className="text-xl text-[#202124]">員工帳號與權限</h3>
           <p className="mt-1 text-sm text-gray-500">
@@ -3464,22 +3587,21 @@ function SettingsPanel({
             placeholder="初始密碼"
             type="password"
           />
-          <select
+          <StyledSelect
             value={newUser.role}
-            onChange={(event) =>
+            onChange={(value) =>
               setNewUser((current) => ({
                 ...current,
-                role: event.target.value as SystemRole,
+                role: value as SystemRole,
               }))
             }
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
           >
             {Object.entries(systemRoleNames).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </StyledSelect>
         </div>
 
         <button
@@ -3511,28 +3633,27 @@ function SettingsPanel({
                 }
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
               />
-              <select
+              <StyledSelect
                 value={user.role}
-                onChange={(event) =>
+                onChange={(value) =>
                   setUsers((current) =>
                     current.map((item) =>
                       item.id === user.id
                         ? {
                             ...item,
-                            role: event.target.value as SystemRole,
+                            role: value as SystemRole,
                           }
                         : item
                     )
                   )
                 }
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none"
               >
                 {Object.entries(systemRoleNames).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
                 ))}
-              </select>
+              </StyledSelect>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -3554,7 +3675,7 @@ function SettingsPanel({
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h3 className="text-xl text-[#202124]">房間、設施與價格</h3>
@@ -3632,7 +3753,7 @@ function SettingsPanel({
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <label className="block rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <label className="block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <span className="text-sm text-gray-500">美容台</span>
           <textarea
             value={groomingStations}
@@ -3643,7 +3764,7 @@ function SettingsPanel({
           />
         </label>
 
-        <label className="block rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <label className="block rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <span className="text-sm text-gray-500">美容時段</span>
           <textarea
             value={groomingTimes}
@@ -3656,7 +3777,7 @@ function SettingsPanel({
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="text-xl text-[#202124]">營業時間與排班</h3>
           <div className="mt-4 grid gap-3">
             <SettingInput
@@ -3702,7 +3823,7 @@ function SettingsPanel({
           </button>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="text-xl text-[#202124]">系統通知與提醒</h3>
           <div className="mt-4 grid gap-3">
             <SettingInput
@@ -3895,7 +4016,7 @@ function OrderSearchPanel({
   onUpdateStatus: (id: string, status: string) => void;
 }) {
   return (
-    <section className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="p-5 border-b border-gray-200">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -3935,10 +4056,9 @@ function OrderSearchPanel({
               ))}
             </div>
 
-            <select
+            <StyledSelect
               value={statusFilter}
-              onChange={(event) => onStatusFilterChange(event.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+              onChange={onStatusFilterChange}
             >
               <option value="全部">全部狀態</option>
               {statusOptions.map((status) => (
@@ -3946,12 +4066,11 @@ function OrderSearchPanel({
                   {status}
                 </option>
               ))}
-            </select>
+            </StyledSelect>
 
-            <select
+            <StyledSelect
               value={paymentFilter}
-              onChange={(event) => onPaymentFilterChange(event.target.value)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+              onChange={onPaymentFilterChange}
             >
               <option value="全部">全部付款</option>
               {paymentStatusOptions.map((status) => (
@@ -3959,7 +4078,7 @@ function OrderSearchPanel({
                   {status}
                 </option>
               ))}
-            </select>
+            </StyledSelect>
           </div>
         </div>
 
@@ -4133,7 +4252,7 @@ function WorkColumn({
   onUpdateStatus: (id: string, status: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-4">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -4285,7 +4404,7 @@ function ScheduleList({
   onSelectOrder: (id: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
       <SectionHeader
         title={title}
         caption={`${orders.length} 筆安排`}
@@ -4497,7 +4616,7 @@ function AnalysisMetric({
   }[tone];
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="group rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-gray-500">{label}</p>
         <span className={`rounded-lg p-2 ${toneClass}`}>
@@ -4531,21 +4650,24 @@ function StatusSelect({
   compact?: boolean;
 }) {
   return (
-    <select
-      value={order.status}
-      disabled={updatingId === order.id}
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => onUpdateStatus(order.id, event.target.value)}
-      className={`rounded-lg border text-sm outline-none ${statusSelectClass(
-        order.status
-      )} ${compact ? "px-2 py-1 text-xs" : "px-3 py-2"}`}
-    >
-      {statusOptions.map((status) => (
-        <option key={status} value={status}>
-          {status}
-        </option>
-      ))}
-    </select>
+    <div className="relative inline-block">
+      <select
+        value={order.status}
+        disabled={updatingId === order.id}
+        onClick={(event) => event.stopPropagation()}
+        onChange={(event) => onUpdateStatus(order.id, event.target.value)}
+        className={`appearance-none rounded-2xl border font-semibold shadow-sm outline-none transition focus:ring-4 focus:ring-[#f4ebe5] disabled:cursor-not-allowed disabled:opacity-60 ${statusSelectClass(
+          order.status
+        )} ${compact ? "py-1 pl-3 pr-8 text-xs" : "py-2 pl-4 pr-9 text-sm"}`}
+      >
+        {statusOptions.map((status) => (
+          <option key={status} value={status}>
+            {status}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-current opacity-60 ${compact ? "h-3.5 w-3.5" : "h-4 w-4"}`} />
+    </div>
   );
 }
 
@@ -4599,7 +4721,7 @@ function ChartPanel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg text-[#202124]">{title}</h2>
@@ -4743,14 +4865,14 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-gray-500">{label}</p>
           <p className="text-2xl text-[#202124] mt-2">{value}</p>
           <p className="text-xs text-gray-500 mt-2">{helper}</p>
         </div>
-        <div className={`rounded-lg p-2 ${toneClass}`}>{icon}</div>
+        <div className={`rounded-2xl p-2 ${toneClass}`}>{icon}</div>
       </div>
     </div>
   );
@@ -4786,19 +4908,19 @@ function SectionHeader({
   caption: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
+    <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gradient-to-br from-white to-[#fbfcfd] px-5 py-4">
       <div>
         <h2 className="text-xl text-[#202124]">{title}</h2>
         <p className="text-sm text-gray-500 mt-1">{caption}</p>
       </div>
-      <div className="rounded-lg bg-[#f7f8fa] p-2 text-[#6f9fc2]">{icon}</div>
+      <div className="rounded-2xl bg-white p-2 text-[#6f9fc2] shadow-sm ring-1 ring-gray-100">{icon}</div>
     </div>
   );
 }
 
 function EmptyNote({ text }: { text: string }) {
   return (
-    <div className="rounded-lg bg-[#f7f8fa] p-3 text-center text-sm text-gray-500">
+    <div className="rounded-2xl bg-[#f7f8fa] p-4 text-center text-sm text-gray-500">
       {text}
     </div>
   );
@@ -5062,7 +5184,46 @@ function OrderDetailDrawer({
                     {pet.notes || "沒有特別備註"}
                   </p>
                 </div>
+
+                {(pet.allergies ||
+                  pet.medicalNotes ||
+                  pet.vaccineDate ||
+                  pet.emergencyContact ||
+                  pet.vetName) && (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <DetailItem label="過敏資訊" value={pet.allergies || "無"} />
+                    <DetailItem label="疾病 / 用藥" value={pet.medicalNotes || "無"} />
+                    <DetailItem label="疫苗日期" value={pet.vaccineDate || "未填寫"} />
+                    <DetailItem
+                      label="獸醫院"
+                      value={
+                        pet.vetName
+                          ? `${pet.vetName}${pet.vetPhone ? ` / ${pet.vetPhone}` : ""}`
+                          : "未填寫"
+                      }
+                    />
+                    <DetailItem label="緊急聯絡" value={pet.emergencyContact || "未填寫"} />
+                  </div>
+                )}
               </>
+            )}
+
+            {order.addOnItems && order.addOnItems.length > 0 && (
+              <div className="mt-4 rounded-lg bg-[#fff8e8] p-3">
+                <p className="text-xs text-[#8a611b]">加購服務</p>
+                <div className="mt-2 space-y-1 text-sm text-[#202124]">
+                  {order.addOnItems.map((item) => (
+                    <div key={item.id} className="flex justify-between gap-3">
+                      <span>{item.name}</span>
+                      <span>NT$ {item.price.toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-3 border-t border-[#f1d58a] pt-2 text-[#8a611b]">
+                    <span>加購小計</span>
+                    <span>NT$ {(order.addOnTotal || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
             )}
           </section>
         </div>
@@ -5147,33 +5308,33 @@ function PaymentEditor({
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block">
           <span className="text-xs text-gray-500">付款狀態</span>
-          <select
+          <StyledSelect
             value={paymentStatus}
-            onChange={(event) => onStatusChange(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+            onChange={onStatusChange}
+            className="mt-1"
           >
             {paymentStatusOptions.map((status) => (
               <option key={status} value={status}>
                 {status}
               </option>
             ))}
-          </select>
+          </StyledSelect>
         </label>
 
         <label className="block">
           <span className="text-xs text-gray-500">付款方式</span>
-          <select
+          <StyledSelect
             value={paymentMethod}
-            onChange={(event) => setPaymentMethod(event.target.value)}
+            onChange={setPaymentMethod}
             disabled={paymentStatus === "未付款"}
-            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2] disabled:bg-gray-50"
+            className="mt-1"
           >
             {paymentMethodOptions.map((method) => (
               <option key={method} value={method}>
                 {method}
               </option>
             ))}
-          </select>
+          </StyledSelect>
         </label>
 
         <label className="block">
@@ -5284,10 +5445,9 @@ function CareLogPanel({
 
       <div className="rounded-lg bg-[#f7f8fa] p-3">
         <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
-          <select
+          <StyledSelect
             value={logType}
-            onChange={(event) => setLogType(event.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+            onChange={setLogType}
           >
             <option value="照護">照護</option>
             <option value="餵食">餵食</option>
@@ -5295,7 +5455,7 @@ function CareLogPanel({
             <option value="美容">美容</option>
             <option value="健康">健康</option>
             <option value="提醒">提醒</option>
-          </select>
+          </StyledSelect>
 
           <label className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-gray-600">
             <input
@@ -5475,10 +5635,10 @@ function AssignmentEditor({
           <span className="text-xs text-gray-500">
             {isAccommodation ? "房位" : "美容台"}
           </span>
-          <select
+          <StyledSelect
             value={assignedSpot}
-            onChange={(event) => setAssignedSpot(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+            onChange={setAssignedSpot}
+            className="mt-1"
           >
             <option value="">尚未安排</option>
             {spotOptions.map((spot) => (
@@ -5486,7 +5646,7 @@ function AssignmentEditor({
                 {spot}
               </option>
             ))}
-          </select>
+          </StyledSelect>
         </label>
 
         {isAccommodation ? (
@@ -5494,10 +5654,10 @@ function AssignmentEditor({
         ) : (
           <label className="block">
             <span className="text-xs text-gray-500">美容時段</span>
-            <select
+            <StyledSelect
               value={scheduledTime}
-              onChange={(event) => setScheduledTime(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6f9fc2]"
+              onChange={setScheduledTime}
+              className="mt-1"
             >
               <option value="">尚未安排</option>
               {options.groomingTimes.map((time) => (
@@ -5505,7 +5665,7 @@ function AssignmentEditor({
                   {time}
                 </option>
               ))}
-            </select>
+            </StyledSelect>
           </label>
         )}
       </div>
@@ -5702,6 +5862,7 @@ function statusBadge(status: string) {
   const map: Record<string, string> = {
     待確認: "bg-[#fff8f2] text-[#b87868]",
     已確認: "bg-[#edf6fc] text-[#3f789f]",
+    待會員確認: "bg-[#fff8e8] text-[#a97922]",
     進行中: "bg-[#f5efe9] text-[#6b3a2a]",
     已完成: "bg-[#eef7ef] text-[#4f7f55]",
     已取消: "bg-[#fff0f0] text-[#b85c68]",
@@ -5726,6 +5887,7 @@ function statusSelectClass(status: string) {
   const map: Record<string, string> = {
     待確認: "border-[#f3d6c9] bg-[#fff8f2] text-[#b87868]",
     已確認: "border-[#d7e8f3] bg-[#f7fbff] text-[#477fa6]",
+    待會員確認: "border-[#f1d58a] bg-[#fff8e8] text-[#8a611b]",
     進行中: "border-[#eadfd8] bg-[#f5efe9] text-[#6b3a2a]",
     已完成: "border-[#d9ead9] bg-[#f3f7f3] text-[#5f8a5f]",
     已取消: "border-[#f1d5d5] bg-[#fff0f0] text-[#b85c68]",

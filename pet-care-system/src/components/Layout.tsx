@@ -110,6 +110,12 @@ export default function Layout() {
   }
 
   async function markNotificationRead(notification: NotificationItem) {
+    if (notification.type === "booking_reconfirm") {
+      setNotificationOpen(false);
+      navigate("/notifications");
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
       await fetch(`${API_BASE}/notifications/${notification.id}/read`, {
@@ -153,10 +159,10 @@ export default function Layout() {
   };
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
-    `px-3 py-2 rounded-full text-sm transition-all ${
+    `relative px-3 py-2 text-sm transition-all after:absolute after:bottom-0 after:left-3 after:right-3 after:h-0.5 after:rounded-full after:transition-all ${
       isActive
-        ? "bg-[#fdf0e0] text-[#6b3a2a]"
-        : "text-gray-600 hover:text-[#6b3a2a] hover:bg-[#faf7f4]"
+        ? "font-medium text-[#6b3a2a] after:bg-[#c8a97e]"
+        : "text-gray-600 after:bg-transparent hover:text-[#6b3a2a] hover:after:bg-[#eadfd8]"
     }`;
 
   const mobileLinkClass =

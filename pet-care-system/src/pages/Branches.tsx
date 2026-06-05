@@ -39,31 +39,31 @@ const branches: Branch[] = [
     phone: "07-123-4567",
     email: "kaohsiung@petcare.test",
     hours: "09:00 - 21:00",
-    image: "/images/hero-pet.jpg",
+    image: "/images/hotel.jpg",
     services: ["寵物住宿", "美容洗護", "照護回報", "健康觀察"],
     transport: "捷運市議會站步行 6 分鐘，附近有合作停車場。",
     features: ["24H 空調", "獨立住宿區", "即時照護紀錄"],
   },
   {
     name: "毛孩樂園 北屯住宿館",
-    tag: "住宿專門館",
+    tag: "住宿 / 美容 / 照護",
     address: "台中市北屯區崇德路三段 168 號",
     phone: "04-2222-8899",
     email: "beitun@petcare.test",
     hours: "08:30 - 21:30",
-    image: "/images/room-deluxe.jpg",
+    image: "/images/hotel2.jpg",
     services: ["寵物住宿", "長住照護", "散步服務", "特殊飲食協助"],
     transport: "近捷運文心崇德站，門口可臨停接送。",
     features: ["大型犬友善", "分區活動空間", "長住方案"],
   },
   {
     name: "毛孩樂園 左營美容館",
-    tag: "美容專門館",
+    tag: "住宿 / 美容 / 照護",
     address: "高雄市左營區裕誠路 256 號",
     phone: "07-555-2020",
     email: "zuoying@petcare.test",
     hours: "10:00 - 20:00",
-    image: "/images/grooming-spa.jpg",
+    image: "/images/hotel3.jpg",
     services: ["基礎洗澡", "造型剪毛", "SPA 深層護理", "皮毛保養"],
     transport: "近巨蛋商圈，距捷運巨蛋站步行 8 分鐘。",
     features: ["預約制美容", "敏感肌照護", "造型諮詢"],
@@ -71,9 +71,12 @@ const branches: Branch[] = [
 ];
 
 export default function Branches() {
-  const [selectedBranchName, setSelectedBranchName] = useState(branches[0].name);
-  const [businessSettings, setBusinessSettings] =
-    useState<BusinessSettings>(defaultBusinessSettings);
+  const [selectedBranchName, setSelectedBranchName] = useState(
+    branches[0].name,
+  );
+  const [businessSettings, setBusinessSettings] = useState<BusinessSettings>(
+    defaultBusinessSettings,
+  );
 
   useEffect(() => {
     fetchPublicSystemSettings()
@@ -86,7 +89,7 @@ export default function Branches() {
   const displayHours = `平日 ${businessSettings.weekdayHours} / 假日 ${businessSettings.weekendHours}`;
   const visibleBranches = useMemo(
     () => branches.map((branch) => ({ ...branch, hours: displayHours })),
-    [displayHours]
+    [displayHours],
   );
   const selectedBranch =
     visibleBranches.find((branch) => branch.name === selectedBranchName) ||
@@ -112,11 +115,11 @@ export default function Branches() {
             </div>
 
             <h1 className="text-4xl leading-tight text-[#3d1a0d] md:text-5xl">
-              選擇離你最近的毛孩照護據點
+              找到最適合毛孩的照護據點
             </h1>
 
             <p className="mt-5 max-w-2xl text-lg leading-relaxed text-[#6b3a2a]">
-              每間分店都提供清楚的服務項目、接送資訊與聯絡方式，方便會員預約住宿、美容與照護服務。
+              查看各分店的服務、交通與聯絡資訊，安心安排住宿、美容與日常照護。
             </p>
           </div>
         </div>
@@ -256,13 +259,18 @@ function BranchCard({
           <span className="rounded-full bg-white/90 px-3 py-1 text-xs text-[#6b3a2a]">
             {branch.tag}
           </span>
-          <h2 className="mt-3 text-2xl text-white drop-shadow">{branch.name}</h2>
+          <h2 className="mt-3 text-2xl text-white drop-shadow">
+            {branch.name}
+          </h2>
         </div>
       </div>
 
       <div className="space-y-5 p-5">
         <div className="space-y-3 text-sm text-gray-600">
-          <DetailRow icon={<MapPin className="h-4 w-4" />} text={branch.address} />
+          <DetailRow
+            icon={<MapPin className="h-4 w-4" />}
+            text={branch.address}
+          />
           <DetailRow icon={<Phone className="h-4 w-4" />} text={branch.phone} />
           <DetailRow icon={<Mail className="h-4 w-4" />} text={branch.email} />
           <DetailRow icon={<Clock className="h-4 w-4" />} text={branch.hours} />
@@ -290,7 +298,10 @@ function BranchCard({
           <p className="mb-2 text-xs text-gray-500">分店特色</p>
           <div className="space-y-2">
             {branch.features.map((feature) => (
-              <div key={feature} className="flex items-center gap-2 text-sm text-[#3d1a0d]">
+              <div
+                key={feature}
+                className="flex items-center gap-2 text-sm text-[#3d1a0d]"
+              >
                 <Star className="h-3.5 w-3.5 text-[#c8a15f]" />
                 {feature}
               </div>
@@ -313,13 +324,13 @@ function BranchCard({
 
 function googleMapsUrl(branch: Branch) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    branch.address
+    branch.address,
   )}`;
 }
 
 function googleMapsEmbedUrl(branch: Branch) {
   return `https://www.google.com/maps?q=${encodeURIComponent(
-    branch.address
+    branch.address,
   )}&output=embed`;
 }
 

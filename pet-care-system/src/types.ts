@@ -16,6 +16,13 @@ export interface Pet {
   weight: number;
   gender: string;
   notes: string;
+  imageUrl?: string;
+  allergies?: string;
+  medicalNotes?: string;
+  vaccineDate?: string;
+  vetName?: string;
+  vetPhone?: string;
+  emergencyContact?: string;
 }
 
 export interface Order {
@@ -27,6 +34,8 @@ export interface Order {
   groomingService?: 'basic' | 'styling' | 'spa';
   startDate: string;
   endDate?: string;
+  addOnItems?: { id: string; name: string; price: number }[];
+  addOnTotal?: number;
   total: number;
   status: string;
   paymentStatus: string;

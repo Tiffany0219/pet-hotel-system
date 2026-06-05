@@ -468,7 +468,7 @@ export default function Rooms() {
                   className="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all border border-[#f0e6df] home-card-hover"
                 >
                   <div
-                    className={`rounded-3xl p-5 mb-5 bg-gradient-to-br ${notice.bg}`}
+                    className={`rounded-3xl p-5 mb-5 bg-gradient-to-br ${notice.bg} flex items-center justify-center`}
                   >
                     <div
                       className={`w-14 h-14 rounded-2xl flex items-center justify-center ${notice.iconBg}`}

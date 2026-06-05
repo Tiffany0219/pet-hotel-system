@@ -14,11 +14,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
+frontend_origins = [
+    origin.strip()
+    for origin in os.environ.get("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": [
+            "origins": frontend_origins
+            or [
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
                 "http://localhost:5174",
@@ -94,6 +101,12 @@ class Pet(db.Model):
 
     notes = db.Column(db.Text, default="")
     image_url = db.Column(db.String(255), default="")
+    allergies = db.Column(db.Text, default="")
+    medical_notes = db.Column(db.Text, default="")
+    vaccine_date = db.Column(db.String(20), default="")
+    vet_name = db.Column(db.String(120), default="")
+    vet_phone = db.Column(db.String(30), default="")
+    emergency_contact = db.Column(db.String(120), default="")
 
     created_at = db.Column(db.DateTime, default=now_local)
 
@@ -119,6 +132,8 @@ class Order(db.Model):
     cancel_reason = db.Column(db.String(120), default="")
 
     total = db.Column(db.Integer, nullable=False)
+    add_on_items = db.Column(db.Text, default="[]")
+    add_on_total = db.Column(db.Integer, default=0)
 
     status = db.Column(db.String(20), default="待確認")
     payment_status = db.Column(db.String(20), default="未付款")
@@ -272,6 +287,34 @@ GROOMING_STATIONS = ["G-01", "G-02", "G-03"]
 
 GROOMING_TIMES = ["09:00", "10:30", "13:00", "14:30", "16:00", "17:30"]
 
+ADD_ON_SERVICES = {
+    "pickup": {
+        "name": "到店接送",
+        "price": 300,
+        "description": "由店家協助定點接送毛孩。",
+    },
+    "medication": {
+        "name": "餵藥與特殊照護",
+        "price": 200,
+        "description": "依家長交代協助用藥、觀察食慾與精神。",
+    },
+    "care_report": {
+        "name": "照片照護回報",
+        "price": 150,
+        "description": "服務期間提供照片與照護狀態回報。",
+    },
+    "walk": {
+        "name": "散步加購",
+        "price": 180,
+        "description": "住宿或托育期間加一次散步活動。",
+    },
+    "checkout_grooming": {
+        "name": "退房前洗澡",
+        "price": 500,
+        "description": "住宿退房前協助基礎洗澡整理。",
+    },
+}
+
 DEFAULT_ASSIGNMENT_OPTIONS = {
     "roomSpots": ROOM_SPOTS,
     "groomingStations": GROOMING_STATIONS,
@@ -281,6 +324,7 @@ DEFAULT_ASSIGNMENT_OPTIONS = {
 DEFAULT_SERVICE_CATALOG = {
     "roomPrices": ROOM_PRICES,
     "groomingPrices": GROOMING_PRICES,
+    "addOnServices": ADD_ON_SERVICES,
 }
 
 DEFAULT_BUSINESS_SETTINGS = {
@@ -291,7 +335,7 @@ DEFAULT_BUSINESS_SETTINGS = {
 }
 
 DEFAULT_NOTIFICATION_SETTINGS = {
-    "bookingReminderHours": 24,
+    "bookingReminderHours": 72,
     "paymentReminderHours": 12,
     "careLogNotifyCustomer": True,
     "channels": ["站內通知", "Email"],
@@ -339,6 +383,12 @@ def pet_to_dict(pet: Pet):
         "gender": pet.gender,
         "notes": pet.notes or "",
         "imageUrl": pet.image_url or "",
+        "allergies": pet.allergies or "",
+        "medicalNotes": pet.medical_notes or "",
+        "vaccineDate": pet.vaccine_date or "",
+        "vetName": pet.vet_name or "",
+        "vetPhone": pet.vet_phone or "",
+        "emergencyContact": pet.emergency_contact or "",
         "createdAt": pet.created_at.isoformat(),
     }
 
@@ -394,6 +444,7 @@ def order_to_dict(order: Order, include_internal_logs: bool = False):
 
     paid_amount = order.paid_amount or 0
     balance_due = max(0, order.total - paid_amount)
+    add_on_items = parse_add_on_items(order.add_on_items)
 
     result = {
         "id": str(order.id),
@@ -415,6 +466,8 @@ def order_to_dict(order: Order, include_internal_logs: bool = False):
         "assignmentNote": order.assignment_note or "",
         "cancelReason": order.cancel_reason or "",
         "total": order.total,
+        "addOnItems": add_on_items,
+        "addOnTotal": order.add_on_total or 0,
         "status": order.status,
         "paymentStatus": order.payment_status,
         "paymentMethod": order.payment_method or "",
@@ -622,6 +675,92 @@ def normalize_price_map(value, defaults):
     return result
 
 
+def add_on_services_to_dict():
+    return {
+        key: {
+            "id": key,
+            "name": value["name"],
+            "price": value["price"],
+            "description": value["description"],
+        }
+        for key, value in ADD_ON_SERVICES.items()
+    }
+
+
+def normalize_add_on_ids(value):
+    if isinstance(value, str):
+        source = value.replace("\n", ",").split(",")
+    elif isinstance(value, list):
+        source = value
+    else:
+        source = []
+
+    result = []
+    seen = set()
+
+    for item in source:
+        add_on_id = str(item).strip()
+
+        if add_on_id not in ADD_ON_SERVICES or add_on_id in seen:
+            continue
+
+        result.append(add_on_id)
+        seen.add(add_on_id)
+
+    return result
+
+
+def serialize_add_on_items(add_on_ids):
+    items = []
+
+    for add_on_id in normalize_add_on_ids(add_on_ids):
+        option = ADD_ON_SERVICES[add_on_id]
+        items.append({
+            "id": add_on_id,
+            "name": option["name"],
+            "price": option["price"],
+        })
+
+    return items
+
+
+def parse_add_on_items(value):
+    if not value:
+        return []
+
+    try:
+        items = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return serialize_add_on_items(value)
+
+    if not isinstance(items, list):
+        return []
+
+    result = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        add_on_id = str(item.get("id", "")).strip()
+        option = ADD_ON_SERVICES.get(add_on_id)
+
+        if not option:
+            continue
+
+        result.append({
+            "id": add_on_id,
+            "name": option["name"],
+            "price": option["price"],
+        })
+
+    return result
+
+
+def add_on_total(add_on_ids):
+    return sum(item["price"] for item in serialize_add_on_items(add_on_ids))
+
+
 def get_service_catalog():
     data = get_json_setting("service_catalog", DEFAULT_SERVICE_CATALOG)
 
@@ -634,6 +773,7 @@ def get_service_catalog():
             data.get("groomingPrices"),
             DEFAULT_SERVICE_CATALOG["groomingPrices"],
         ),
+        "addOnServices": add_on_services_to_dict(),
     }
 
 
@@ -647,6 +787,7 @@ def save_service_catalog(data):
             data.get("groomingPrices") if isinstance(data, dict) else None,
             DEFAULT_SERVICE_CATALOG["groomingPrices"],
         ),
+        "addOnServices": add_on_services_to_dict(),
     }
 
     return save_json_setting("service_catalog", catalog)
@@ -881,7 +1022,7 @@ def order_matches_work_date(order: Order, target_date: str):
 
 def auto_cancel_expired_orders():
     today = now_local().date().isoformat()
-    expirable_statuses = ["待確認", "已確認"]
+    expirable_statuses = ["待確認", "已確認", "待會員確認"]
     expired_orders = (
         Order.query
         .filter(
@@ -906,6 +1047,72 @@ def auto_cancel_expired_orders():
 
     db.session.commit()
     return len(expired_orders)
+
+
+def create_upcoming_booking_reminders(user: User):
+    settings = get_notification_settings()
+
+    try:
+        reminder_hours = int(settings.get("bookingReminderHours", 24))
+    except (TypeError, ValueError):
+        reminder_hours = 24
+
+    days_before = max(1, round(reminder_hours / 24))
+    target_date = (now_local().date() + timedelta(days=days_before)).isoformat()
+    orders = (
+        Order.query
+        .filter_by(user_id=user.id)
+        .filter(
+            Order.status.in_(["已確認", "待會員確認"]),
+            Order.start_date == target_date,
+        )
+        .all()
+    )
+
+    changed_count = 0
+
+    for order in orders:
+        if order.status == "已確認":
+            order.status = "待會員確認"
+            changed_count += 1
+            db.session.add(AuditLog(
+                order_id=order.id,
+                actor_id=None,
+                action="系統預約確認",
+                detail=f"預約日期 {order.start_date} 即將到來，等待會員再次確認。",
+            ))
+
+        exists = (
+            Notification.query
+            .filter_by(
+                user_id=user.id,
+                order_id=order.id,
+                type="booking_reconfirm",
+            )
+            .first()
+        )
+
+        if exists:
+            continue
+
+        service_name = "住宿" if order.service_type == "accommodation" else "美容"
+        time_text = (
+            f"{order.scheduled_time} "
+            if order.service_type == "grooming" and order.scheduled_time
+            else ""
+        )
+        create_customer_notification(
+            order,
+            "請確認是否保留預約",
+            f"{target_date} {time_text}有 {order.pet.name if order.pet else '毛孩'} 的{service_name}預約，請確認是否仍要前往。若不前往，系統會取消訂單並釋出原本安排的位置。",
+            "booking_reconfirm",
+        )
+        changed_count += 1
+
+    if changed_count:
+        db.session.commit()
+
+    return changed_count
 
 
 def create_customer_notification(
@@ -1032,7 +1239,7 @@ def check_grooming_time_available(target_date: str, scheduled_time: str):
 
 
 def can_customer_cancel(order: Order):
-    if order.status not in ["待確認", "已確認"]:
+    if order.status not in ["待確認", "已確認", "待會員確認"]:
         return False, "此訂單目前不可取消"
 
     today = now_local().date()
@@ -1130,6 +1337,7 @@ def validate_order_assignment(order: Order, assigned_spot: str, scheduled_time: 
 
 def calculate_total(data):
     service_type = data.get("serviceType")
+    extras_total = add_on_total(data.get("addOnItems"))
 
     if service_type == "accommodation":
         service_catalog = get_service_catalog()
@@ -1152,7 +1360,7 @@ def calculate_total(data):
 
         days = max(1, (end - start).days)
 
-        return room_prices[room_type] * days
+        return room_prices[room_type] * days + extras_total
 
     if service_type == "grooming":
         service_catalog = get_service_catalog()
@@ -1162,7 +1370,7 @@ def calculate_total(data):
         if grooming_service not in grooming_prices:
             raise ValueError("美容服務不存在")
 
-        return grooming_prices[grooming_service]
+        return grooming_prices[grooming_service] + extras_total
 
     raise ValueError("服務類型不存在")
 
@@ -1310,6 +1518,12 @@ def create_pet():
         gender=data["gender"],
         notes=data.get("notes", ""),
         image_url=data.get("imageUrl") or default_pet_image(species),
+        allergies=data.get("allergies", ""),
+        medical_notes=data.get("medicalNotes", ""),
+        vaccine_date=data.get("vaccineDate", ""),
+        vet_name=data.get("vetName", ""),
+        vet_phone=data.get("vetPhone", ""),
+        emergency_contact=data.get("emergencyContact", ""),
     )
 
     db.session.add(pet)
@@ -1345,6 +1559,12 @@ def update_pet(pet_id):
     pet.gender = data.get("gender", pet.gender)
     pet.notes = data.get("notes", pet.notes)
     pet.image_url = data.get("imageUrl") or pet.image_url or default_pet_image(next_species)
+    pet.allergies = data.get("allergies", pet.allergies)
+    pet.medical_notes = data.get("medicalNotes", pet.medical_notes)
+    pet.vaccine_date = data.get("vaccineDate", pet.vaccine_date)
+    pet.vet_name = data.get("vetName", pet.vet_name)
+    pet.vet_phone = data.get("vetPhone", pet.vet_phone)
+    pet.emergency_contact = data.get("emergencyContact", pet.emergency_contact)
 
     db.session.commit()
 
@@ -1380,6 +1600,7 @@ def delete_pet(pet_id):
 @auth_required
 def get_orders():
     auto_cancel_expired_orders()
+    create_upcoming_booking_reminders(request.current_user)
     orders = (
         Order.query
         .filter_by(user_id=request.current_user.id)
@@ -1431,6 +1652,9 @@ def create_order():
     except ValueError as exc:
         return jsonify({"message": str(exc)}), 400
 
+    add_on_items = serialize_add_on_items(data.get("addOnItems"))
+    add_on_items_total = sum(item["price"] for item in add_on_items)
+
     if data.get("serviceType") == "accommodation":
         room_type = data.get("roomType", "standard")
         start_date = data.get("startDate")
@@ -1477,6 +1701,8 @@ def create_order():
         if data.get("serviceType") == "grooming"
         else None,
         total=total,
+        add_on_items=json.dumps(add_on_items, ensure_ascii=False),
+        add_on_total=add_on_items_total,
         status="待確認",
         payment_status="未付款",
         payment_method="",
@@ -1514,6 +1740,10 @@ def cancel_order(order_id):
     cancel_reason = str(data.get("cancelReason", "") or "").strip()
     order.status = "已取消"
     order.cancel_reason = cancel_reason
+    order.assigned_spot = None
+    order.assignment_note = (
+        f"{order.assignment_note or ''}\n客戶取消預約，原安排位置已釋出。"
+    ).strip()
     create_audit_log(
         "客戶取消預約",
         f"客戶自行取消預約"
@@ -1525,6 +1755,71 @@ def cancel_order(order_id):
     return jsonify({
         "message": "預約已取消",
         "order": order_to_dict(order)
+    })
+
+
+@app.patch("/api/orders/<int:order_id>/reconfirm")
+@auth_required
+def reconfirm_order(order_id):
+    order = (
+        Order.query
+        .filter_by(id=order_id, user_id=request.current_user.id)
+        .first()
+    )
+
+    if not order:
+        return jsonify({"message": "找不到訂單"}), 404
+
+    data = request.get_json() or {}
+    confirmed = bool(data.get("confirmed"))
+
+    if order.status not in ["待會員確認", "已確認"]:
+        return jsonify({"message": "此訂單目前不需要再次確認"}), 400
+
+    now = now_local()
+
+    if confirmed:
+        order.status = "已確認"
+        db.session.add(AuditLog(
+            order_id=order.id,
+            actor_id=request.current_user.id,
+            action="會員確認預約",
+            detail="會員於預約前再次確認仍要前往，預約成立。",
+        ))
+        response_message = "已確認預約，店家會保留原本安排的位置。"
+    else:
+        order.status = "已取消"
+        order.cancel_reason = "會員於預約前確認不前往"
+        order.assigned_spot = None
+        order.assignment_note = (
+            f"{order.assignment_note or ''}\n會員取消預約，原安排位置已釋出。"
+        ).strip()
+        db.session.add(AuditLog(
+            order_id=order.id,
+            actor_id=request.current_user.id,
+            action="會員取消預約確認",
+            detail="會員於預約前確認不前往，系統取消訂單並釋出原本安排的位置。",
+        ))
+        response_message = "已取消預約，原本安排的位置已釋出。"
+
+    notifications = (
+        Notification.query
+        .filter_by(
+            user_id=request.current_user.id,
+            order_id=order.id,
+            type="booking_reconfirm",
+        )
+        .all()
+    )
+
+    for notification in notifications:
+        notification.read_at = notification.read_at or now
+
+    db.session.commit()
+
+    return jsonify({
+        "message": response_message,
+        "order": order_to_dict(order),
     })
 
 
@@ -1542,6 +1837,9 @@ def pay_order(order_id):
 
     if order.status == "已取消":
         return jsonify({"message": "已取消的訂單不可付款"}), 400
+
+    if order.status == "待會員確認":
+        return jsonify({"message": "請先確認是否保留預約，再進行付款"}), 400
 
     data = request.get_json() or {}
     payment_method = str(data.get("paymentMethod", "線上付款") or "線上付款").strip()
@@ -1585,7 +1883,7 @@ def update_order_status(order_id):
     data = request.get_json() or {}
     next_status = data.get("status")
 
-    allowed_status = ["待確認", "已確認", "進行中", "已完成", "已取消"]
+    allowed_status = ["待確認", "已確認", "待會員確認", "進行中", "已完成", "已取消"]
 
     if next_status not in allowed_status:
         return jsonify({"message": "狀態不正確"}), 400
@@ -1646,6 +1944,7 @@ def review_order(order_id):
 @app.get("/api/notifications")
 @auth_required
 def get_notifications():
+    create_upcoming_booking_reminders(request.current_user)
     include_read = request.args.get("includeRead") in ["1", "true", "yes"]
     query = Notification.query.filter_by(user_id=request.current_user.id)
 
@@ -1746,7 +2045,7 @@ def admin_stats():
 
     all_orders = Order.query.all()
     valid_orders = [order for order in all_orders if order.status != "已取消"]
-    active_status = {"待確認", "已確認", "進行中"}
+    active_status = {"待確認", "已確認", "待會員確認", "進行中"}
 
     revenue = sum(
         order.paid_amount or (
@@ -1983,6 +2282,12 @@ def admin_create_order():
             gender=gender,
             notes=str(pet_data.get("notes", "") or "").strip(),
             image_url=pet_data.get("imageUrl") or default_pet_image(species),
+            allergies=str(pet_data.get("allergies", "") or "").strip(),
+            medical_notes=str(pet_data.get("medicalNotes", "") or "").strip(),
+            vaccine_date=str(pet_data.get("vaccineDate", "") or "").strip(),
+            vet_name=str(pet_data.get("vetName", "") or "").strip(),
+            vet_phone=str(pet_data.get("vetPhone", "") or "").strip(),
+            emergency_contact=str(pet_data.get("emergencyContact", "") or "").strip(),
         )
         db.session.add(pet)
         db.session.flush()
@@ -1994,6 +2299,9 @@ def admin_create_order():
         return jsonify({"message": str(exc)}), 400
 
     service_type = data.get("serviceType")
+    add_on_items = serialize_add_on_items(data.get("addOnItems"))
+    add_on_items_total = sum(item["price"] for item in add_on_items)
+
     if service_type == "accommodation":
         is_available, full_date = check_room_available_for_range(
             data.get("roomType", "standard"),
@@ -2022,6 +2330,8 @@ def admin_create_order():
         end_date=data.get("endDate") if service_type == "accommodation" else None,
         scheduled_time=data.get("scheduledTime") if service_type == "grooming" else None,
         total=total,
+        add_on_items=json.dumps(add_on_items, ensure_ascii=False),
+        add_on_total=add_on_items_total,
         status=data.get("status") if data.get("status") in ["待確認", "已確認"] else "已確認",
         payment_status="未付款",
         payment_method="",
@@ -2456,7 +2766,7 @@ def admin_update_order_status(order_id):
 
     data = request.get_json() or {}
     next_status = data.get("status")
-    allowed_status = ["待確認", "已確認", "進行中", "已完成", "已取消"]
+    allowed_status = ["待確認", "已確認", "待會員確認", "進行中", "已完成", "已取消"]
 
     if next_status not in allowed_status:
         return jsonify({"message": "狀態不正確"}), 400
@@ -2871,7 +3181,7 @@ def worker_update_order_status(order_id):
 
     data = request.get_json() or {}
     next_status = data.get("status")
-    allowed_status = ["已確認", "進行中", "已完成"]
+    allowed_status = ["已確認", "待會員確認", "進行中", "已完成"]
 
     if next_status not in allowed_status:
         return jsonify({"message": "狀態不正確"}), 400
@@ -3343,6 +3653,8 @@ def ensure_order_assignment_columns():
         "paid_amount": 'ALTER TABLE "order" ADD COLUMN paid_amount INTEGER DEFAULT 0',
         "receipt_no": 'ALTER TABLE "order" ADD COLUMN receipt_no VARCHAR(40) DEFAULT ""',
         "paid_at": 'ALTER TABLE "order" ADD COLUMN paid_at DATETIME',
+        "add_on_items": 'ALTER TABLE "order" ADD COLUMN add_on_items TEXT DEFAULT "[]"',
+        "add_on_total": 'ALTER TABLE "order" ADD COLUMN add_on_total INTEGER DEFAULT 0',
     }
 
     for column, statement in migrations.items():
@@ -3373,6 +3685,28 @@ def ensure_order_assignment_columns():
     db.session.commit()
 
 
+def ensure_pet_health_columns():
+    existing_columns = {
+        row[1]
+        for row in db.session.execute(db.text('PRAGMA table_info("pet")'))
+    }
+
+    migrations = {
+        "allergies": 'ALTER TABLE "pet" ADD COLUMN allergies TEXT DEFAULT ""',
+        "medical_notes": 'ALTER TABLE "pet" ADD COLUMN medical_notes TEXT DEFAULT ""',
+        "vaccine_date": 'ALTER TABLE "pet" ADD COLUMN vaccine_date VARCHAR(20) DEFAULT ""',
+        "vet_name": 'ALTER TABLE "pet" ADD COLUMN vet_name VARCHAR(120) DEFAULT ""',
+        "vet_phone": 'ALTER TABLE "pet" ADD COLUMN vet_phone VARCHAR(30) DEFAULT ""',
+        "emergency_contact": 'ALTER TABLE "pet" ADD COLUMN emergency_contact VARCHAR(120) DEFAULT ""',
+    }
+
+    for column, statement in migrations.items():
+        if column not in existing_columns:
+            db.session.execute(db.text(statement))
+
+    db.session.commit()
+
+
 def ensure_care_log_photo_column():
     existing_columns = {
         row[1]
@@ -3389,6 +3723,7 @@ def ensure_care_log_photo_column():
 with app.app_context():
     db.create_all()
     ensure_order_assignment_columns()
+    ensure_pet_health_columns()
     ensure_care_log_photo_column()
     seed_demo_user()
     seed_staff_user()
@@ -3411,4 +3746,5 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    port = int(os.environ.get("PORT", "5050"))
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1", host="0.0.0.0", port=port)

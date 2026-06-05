@@ -34,6 +34,12 @@ type Order = {
     gender: string;
     notes: string;
     imageUrl?: string;
+    allergies?: string;
+    medicalNotes?: string;
+    vaccineDate?: string;
+    vetName?: string;
+    vetPhone?: string;
+    emergencyContact?: string;
   } | null;
   serviceType: "accommodation" | "grooming";
   roomType?: "standard" | "deluxe" | "vip" | null;
@@ -45,6 +51,8 @@ type Order = {
   assignmentNote?: string;
   cancelReason?: string;
   total: number;
+  addOnItems?: { id: string; name: string; price: number }[];
+  addOnTotal?: number;
   paymentStatus: string;
   paymentMethod?: string;
   paidAmount?: number;
@@ -154,11 +162,26 @@ export default function OrderDetail() {
               <Info label="會員備註" value={order.notes || "無"} />
               <Info label="取消原因" value={order.cancelReason || "無"} />
             </div>
+            {order.addOnItems && order.addOnItems.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-[#f0e6df] bg-[#fff8f2] p-4">
+                <p className="mb-3 text-sm text-[#6b3a2a]">加購服務</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {order.addOnItems.map((item) => (
+                    <Info
+                      key={item.id}
+                      label={item.name}
+                      value={`NT$ ${item.price.toLocaleString()}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </Panel>
 
           <Panel title="付款資訊" icon={<CreditCard />}>
             <div className="grid gap-3 sm:grid-cols-3">
               <Info label="總金額" value={`NT$ ${order.total.toLocaleString()}`} />
+              <Info label="加購小計" value={`NT$ ${(order.addOnTotal || 0).toLocaleString()}`} />
               <Info label="已收金額" value={`NT$ ${(order.paidAmount || 0).toLocaleString()}`} />
               <Info label="付款方式" value={order.paymentMethod || "未付款"} />
             </div>
@@ -210,6 +233,18 @@ export default function OrderDetail() {
               <Info label="年齡 / 體重" value={`${order.pet?.age || "-"} 歲 / ${order.pet?.weight || "-"} kg`} />
               <Info label="性別" value={order.pet?.gender || "-"} />
               <Info label="照護備註" value={order.pet?.notes || "無"} />
+              <Info label="過敏資訊" value={order.pet?.allergies || "無"} />
+              <Info label="疾病 / 用藥" value={order.pet?.medicalNotes || "無"} />
+              <Info label="疫苗日期" value={order.pet?.vaccineDate || "未填寫"} />
+              <Info
+                label="獸醫院"
+                value={
+                  order.pet?.vetName
+                    ? `${order.pet.vetName}${order.pet.vetPhone ? ` / ${order.pet.vetPhone}` : ""}`
+                    : "未填寫"
+                }
+              />
+              <Info label="緊急聯絡" value={order.pet?.emergencyContact || "未填寫"} />
             </div>
           </Panel>
 

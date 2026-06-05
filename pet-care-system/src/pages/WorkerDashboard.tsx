@@ -46,6 +46,12 @@ type WorkOrder = {
     age?: number;
     weight?: number;
     notes?: string;
+    allergies?: string;
+    medicalNotes?: string;
+    vaccineDate?: string;
+    vetName?: string;
+    vetPhone?: string;
+    emergencyContact?: string;
   } | null;
   serviceType: "accommodation" | "grooming";
   roomType?: "standard" | "deluxe" | "vip";
@@ -1259,6 +1265,7 @@ function statusBadge(status: string) {
   const map: Record<string, string> = {
     待確認: "bg-[#fff8e8] text-[#a97922]",
     已確認: "bg-[#edf6fc] text-[#3f789f]",
+    待會員確認: "bg-[#fff8e8] text-[#a97922]",
     進行中: "bg-[#fdf0e0] text-[#6b3a2a]",
     已完成: "bg-[#eef7ef] text-[#4f7f55]",
     已取消: "bg-[#fff0f0] text-[#b85c68]",
@@ -1301,6 +1308,9 @@ function petSummary(order: WorkOrder) {
     pet.breed,
     pet.weight ? `${pet.weight}kg` : "",
     pet.notes ? `備註：${pet.notes}` : "",
+    pet.allergies ? `過敏：${pet.allergies}` : "",
+    pet.medicalNotes ? `照護：${pet.medicalNotes}` : "",
+    pet.emergencyContact ? `緊急聯絡：${pet.emergencyContact}` : "",
   ]
     .filter(Boolean)
     .join(" / ");

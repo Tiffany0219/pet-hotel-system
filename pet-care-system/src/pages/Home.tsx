@@ -42,6 +42,39 @@ type CustomerOrder = {
   careLogs?: CareLog[];
 };
 
+const heroSlides = [
+  {
+    src: "/images/hero-pet.jpg",
+    title: "溫柔照護每一天",
+    subtitle: "登入後可查看房況與照護回報",
+  },
+  {
+    src: "/images/room-standard.jpg",
+    title: "安心住宿空間",
+    subtitle: "每日房況與入住安排同步更新",
+  },
+  {
+    src: "/images/room-deluxe.jpg",
+    title: "舒適陪伴時光",
+    subtitle: "住宿、退房與付款狀態清楚掌握",
+  },
+  {
+    src: "/images/room-vip.jpg",
+    title: "VIP 專屬照護",
+    subtitle: "為需要更多陪伴的毛孩安排獨立空間",
+  },
+  {
+    src: "/images/grooming-basic.jpg",
+    title: "清爽美容護理",
+    subtitle: "洗澡、修剪與照護紀錄透明可查",
+  },
+  {
+    src: "/images/grooming-spa.jpg",
+    title: "SPA 深層呵護",
+    subtitle: "完成服務後可查看店家回報與照片",
+  },
+];
+
 export default function Home() {
   const { user } = useAuth();
 
@@ -55,6 +88,7 @@ export default function Home() {
   const [recentCareLog, setRecentCareLog] = useState<
     (CareLog & { petName?: string }) | null
   >(null);
+  const [activeHeroIndex, setActiveHeroIndex] = useState(0);
 
   useEffect(() => {
     async function fetchRoomAvailability() {
@@ -116,6 +150,16 @@ export default function Home() {
 
     fetchRecentCareLog();
   }, [user]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveHeroIndex((current) => (current + 1) % heroSlides.length);
+    }, 3600);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const activeHeroSlide = heroSlides[activeHeroIndex];
 
   return (
     <div>
@@ -247,40 +291,27 @@ export default function Home() {
             <div className="relative fade-up delay-1">
               <div className="relative rounded-[2rem] p-4 bg-white/70 shadow-2xl border border-[#eadfd8] hero-card-animate">
                 <div className="relative h-[430px] overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-[#fdf6f0] to-[#eadfd8]">
-                  <img
-                    src="/images/hero-pet.jpg"
-                    alt="寵物住宿與美容照護"
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.style.display = "none";
+                  {heroSlides.map((slide, index) => {
+                    const active = index === activeHeroIndex;
 
-                      const fallback =
-                        target.nextElementSibling as HTMLElement | null;
-
-                      if (fallback) {
-                        fallback.style.display = "flex";
-                      }
-                    }}
-                  />
-
-                  {/* 沒放照片時的備用畫面 */}
-                  <div className="hidden w-full h-full items-center justify-center bg-gradient-to-br from-[#fdf6f0] to-[#eadfd8]">
-                    <div className="text-center">
-                      <div className="text-8xl mb-5 hero-dog-animate">
-                        🐶
-                      </div>
-                      <p className="text-[#6b3a2a] text-lg">
-                        可放入首頁寵物照片
-                      </p>
-                      <p className="text-sm text-gray-500 mt-2">
-                        public/images/hero-pet.jpg
-                      </p>
-                    </div>
-                  </div>
+                    return (
+                      <img
+                        key={slide.src}
+                        src={slide.src}
+                        alt={slide.title}
+                        className={`absolute inset-0 h-full w-full object-cover transition-all duration-1000 ease-out ${
+                          active
+                            ? "opacity-100 scale-105 hero-carousel-image"
+                            : "opacity-0 scale-100"
+                        }`}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    );
+                  })}
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent"></div>
-
                   {/* 登入後才顯示：房況，並與後端同步 */}
                   {user && (
                     <div className="absolute left-4 top-4 rounded-2xl bg-white/88 backdrop-blur-sm shadow-md border border-white/60 px-4 py-3 w-44">
@@ -363,12 +394,30 @@ export default function Home() {
                     </div>
                   )}
 
+                  <div className="absolute inset-x-0 bottom-5 flex justify-center">
+                    <div className="flex items-center gap-2 rounded-full bg-black/20 px-4 py-2 shadow-sm backdrop-blur-sm">
+                      {heroSlides.map((slide, index) => (
+                        <button
+                          key={slide.src}
+                          type="button"
+                          onClick={() => setActiveHeroIndex(index)}
+                          className={`h-2.5 w-2.5 rounded-full transition-all ${
+                            index === activeHeroIndex
+                              ? "bg-white scale-125"
+                              : "bg-white/55 hover:bg-white/85"
+                          }`}
+                          aria-label={`切換到 ${slide.title}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
                   {/* 左下文字：登入前後顯示不同內容 */}
-                  <div className="absolute left-6 bottom-6 text-white">
+                  <div className="absolute left-6 bottom-14 text-white">
                     <p className="text-sm mb-1 opacity-90">Pet Care Center</p>
 
                     <h3 className="text-3xl drop-shadow mb-2">
-                      溫柔照護每一天
+                      {activeHeroSlide.title}
                     </h3>
 
                     {user ? (
@@ -383,12 +432,12 @@ export default function Home() {
                         </div>
 
                         <p className="text-sm text-white/90">
-                          超過 1000 個家庭信賴
+                          {activeHeroSlide.subtitle}
                         </p>
                       </>
                     ) : (
                       <p className="text-sm text-white/90">
-                        登入後可查看房況與照護回報
+                        {activeHeroSlide.subtitle}
                       </p>
                     )}
                   </div>
@@ -427,8 +476,8 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            <div className="group service-card bg-gradient-to-br from-[#f6f3ff] to-[#eef6ff] p-10 rounded-3xl home-card-hover">
-              <div className="w-16 h-16 bg-[#7b8fe8] rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <div className="group service-card bg-gradient-to-br from-[#f2fbfb] via-[#eef7ff] to-[#fffaf2] p-10 rounded-3xl border border-[#dbeceb] home-card-hover">
+              <div className="w-16 h-16 bg-[#5d9aa3] rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-md">
                 <Bed className="w-8 h-8 text-white" />
               </div>
 
@@ -447,7 +496,7 @@ export default function Home() {
                   "VIP總統套房 - 頂級享受",
                 ].map((t) => (
                   <div key={t} className="flex items-center gap-2 text-gray-700">
-                    <CheckCircle className="w-5 h-5 text-[#7b8fe8]" />
+                    <CheckCircle className="w-5 h-5 text-[#5d9aa3]" />
                     <span>{t}</span>
                   </div>
                 ))}
@@ -455,14 +504,14 @@ export default function Home() {
 
               <Link
                 to="/rooms"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#7b8fe8] text-white rounded-full hover:opacity-90 transition-all hover:-translate-y-1"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#5d9aa3] text-white rounded-full hover:bg-[#4b838b] transition-all hover:-translate-y-1 shadow-md"
               >
                 查看詳情 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
-            <div className="group service-card bg-gradient-to-br from-[#fff2f6] to-[#fff6ef] p-10 rounded-3xl home-card-hover">
-              <div className="w-16 h-16 bg-[#e88aa6] rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <div className="group service-card bg-gradient-to-br from-[#fff7f4] via-[#fff1eb] to-[#fff8ee] p-10 rounded-3xl border border-[#f1ded3] home-card-hover">
+              <div className="w-16 h-16 bg-[#e08a76] rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-md">
                 <Scissors className="w-8 h-8 text-white" />
               </div>
 
@@ -477,7 +526,7 @@ export default function Home() {
               <div className="space-y-3 mb-8">
                 {["基礎洗澡護理", "造型剪毛設計", "SPA深層護理"].map((t) => (
                   <div key={t} className="flex items-center gap-2 text-gray-700">
-                    <CheckCircle className="w-5 h-5 text-[#e88aa6]" />
+                    <CheckCircle className="w-5 h-5 text-[#e08a76]" />
                     <span>{t}</span>
                   </div>
                 ))}
@@ -485,7 +534,7 @@ export default function Home() {
 
               <Link
                 to="/grooming"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#e88aa6] text-white rounded-full hover:opacity-90 transition-all hover:-translate-y-1"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#e08a76] text-white rounded-full hover:bg-[#cf735d] transition-all hover:-translate-y-1 shadow-md"
               >
                 查看詳情 <ArrowRight className="w-4 h-4" />
               </Link>

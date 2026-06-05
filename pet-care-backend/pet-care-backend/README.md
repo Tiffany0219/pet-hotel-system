@@ -7,7 +7,9 @@
 - 會員註冊 / 登入
 - JWT Token 驗證
 - 寵物資料 CRUD
+- 寵物健康資料欄位：過敏、疾病 / 用藥、疫苗日期、獸醫院與緊急聯絡人
 - 建立預約訂單
+- 預約加購服務與加購金額計算
 - 查詢我的訂單
 - 取消預約
 - 模擬付款
@@ -22,9 +24,10 @@
 - 會員可查看自己訂單的公開照護紀錄
 - 店務人員可查看訂單操作紀錄，包含狀態、安排、付款與照護紀錄異動
 - 會員通知中心與通知已讀功能
+- 預約前幾天自動產生會員確認通知，會員確認後預約才維持成立；若會員取消，訂單會取消並釋出原本安排的位置
 - 員工上班 / 下班打卡紀錄
 - 美容師與寵物照護師工作排程查詢
-- 美容師與寵物照護師可新增服務回報、異常通知與完成照片
+- 美容師與寵物照護師可更新服務狀態、新增服務回報、異常通知與完成照片
 - 系統管理員可匯出營運資料，並管理員工班表
 
 ## 安裝與執行
@@ -136,6 +139,7 @@ Authorization: `Bearer ${localStorage.getItem("token")}`
 - GET `/api/orders`
 - POST `/api/orders`
 - PATCH `/api/orders/:id/cancel`
+- PATCH `/api/orders/:id/reconfirm`
 - PATCH `/api/orders/:id/pay`
 - POST `/api/orders/:id/review`
 - GET `/api/orders/:id/care-logs`
@@ -170,7 +174,8 @@ Authorization: `Bearer ${localStorage.getItem("token")}`
 - POST `/api/staff/attendance/clock-in`
 - POST `/api/staff/attendance/clock-out`
 - GET `/api/worker/schedule`
-- POST `/api/worker/orders/:id/report`
+- PATCH `/api/worker/orders/:id/status`
+- POST `/api/worker/orders/:id/care-logs`
 
 ### Notifications
 
