@@ -175,6 +175,21 @@ export default function Pets() {
     setEditingPet(null);
   };
 
+  const changeSpecies = (species: string) => {
+    const defaultImage =
+      species === "貓"
+        ? "/images/pets/cat-1.jpg"
+        : species === "狗"
+        ? "/images/pets/dog-1.jpg"
+        : "/images/pets/pet-default.jpg";
+
+    setFormData((current) => ({
+      ...current,
+      species,
+      imageUrl: defaultImage,
+    }));
+  };
+
   const uploadPetImage = (file: File | undefined) => {
     if (!file) return;
 
@@ -437,29 +452,32 @@ export default function Pets() {
                 </Field>
 
                 <Field label="物種 *">
-                  <select
-                    value={formData.species}
-                    onChange={(e) => {
-                      const species = e.target.value;
-                      const defaultImage =
-                        species === "貓"
-                          ? "/images/pets/cat-1.jpg"
-                          : species === "狗"
-                          ? "/images/pets/dog-1.jpg"
-                          : "/images/pets/pet-default.jpg";
+                  <div className="grid grid-cols-3 gap-2 rounded-[1.4rem] border border-[#eadfd8] bg-[#fffaf6] p-2 shadow-[0_10px_24px_rgba(80,53,42,0.04)]">
+                    {[
+                      { value: "狗", label: "狗", icon: Dog },
+                      { value: "貓", label: "貓", icon: Cat },
+                      { value: "其他", label: "其他", icon: PawPrint },
+                    ].map((option) => {
+                      const active = formData.species === option.value;
+                      const OptionIcon = option.icon;
 
-                      setFormData({
-                        ...formData,
-                        species,
-                        imageUrl: defaultImage,
-                      });
-                    }}
-                    className="input-soft"
-                  >
-                    <option>狗</option>
-                    <option>貓</option>
-                    <option>其他</option>
-                  </select>
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => changeSpecies(option.value)}
+                          className={`flex h-12 items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition-all ${
+                            active
+                              ? "bg-[#6b3a2a] text-white shadow-md"
+                              : "text-[#6b3a2a] hover:bg-white"
+                          }`}
+                        >
+                          <OptionIcon className="h-4 w-4" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Field>
 
                 <Field label="品種 *">
@@ -475,16 +493,31 @@ export default function Pets() {
                 </Field>
 
                 <Field label="性別 *">
-                  <select
-                    value={formData.gender}
-                    onChange={(e) =>
-                      setFormData({ ...formData, gender: e.target.value })
-                    }
-                    className="input-soft"
-                  >
-                    <option>公</option>
-                    <option>母</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-2 rounded-[1.4rem] border border-[#eadfd8] bg-[#fffaf6] p-2 shadow-[0_10px_24px_rgba(80,53,42,0.04)]">
+                    {["公", "母"].map((gender) => {
+                      const active = formData.gender === gender;
+
+                      return (
+                        <button
+                          key={gender}
+                          type="button"
+                          onClick={() =>
+                            setFormData((current) => ({
+                              ...current,
+                              gender,
+                            }))
+                          }
+                          className={`flex h-12 items-center justify-center rounded-2xl text-sm font-semibold transition-all ${
+                            active
+                              ? "bg-[#6b3a2a] text-white shadow-md"
+                              : "text-[#6b3a2a] hover:bg-white"
+                          }`}
+                        >
+                          {gender}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Field>
 
                 <Field label="年齡（歲）*">
@@ -522,18 +555,31 @@ export default function Pets() {
 
                 <div className="md:col-span-2">
                   <Field label="選擇寵物照片">
-                    <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+                    <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
                       <div className="rounded-3xl border border-[#eadfd8] bg-[#fffaf6] p-4 shadow-[0_14px_34px_rgba(80,53,42,0.06)]">
-                        <div className="relative aspect-square overflow-hidden rounded-3xl bg-white">
+                        <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-white">
                           {formData.imageUrl ? (
-                            <img
-                              src={formData.imageUrl}
-                              alt="目前寵物照片"
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
+                            <>
+                              <img
+                                src={formData.imageUrl}
+                                alt="目前寵物照片"
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  target.style.display = "none";
+
+                                  const fallback =
+                                    target.nextElementSibling as HTMLElement | null;
+
+                                  if (fallback) {
+                                    fallback.style.display = "flex";
+                                  }
+                                }}
+                              />
+                              <div className="hidden h-full w-full items-center justify-center bg-[#fdf6f0] text-6xl">
+                                {emoji(formData.species)}
+                              </div>
+                            </>
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-6xl">
                               {emoji(formData.species)}
@@ -560,7 +606,7 @@ export default function Pets() {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                         {selectedImages.map((img) => {
                           const active = formData.imageUrl === img.url;
 
@@ -574,13 +620,13 @@ export default function Pets() {
                                   imageUrl: img.url,
                                 })
                               }
-                              className={`group relative overflow-hidden rounded-3xl border transition-all ${
+                              className={`group relative overflow-hidden rounded-3xl border p-2 text-left transition-all ${
                                 active
-                                  ? "border-[#6b3a2a] bg-[#fdf0e0] shadow-lg"
-                                  : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:shadow-md"
+                                  ? "border-[#6b3a2a] bg-[#fff3e8] shadow-lg"
+                                  : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:bg-[#fffaf6] hover:shadow-md"
                               }`}
                             >
-                              <div className="relative h-28 bg-[#fdf6f0]">
+                              <div className="relative h-20 overflow-hidden rounded-2xl bg-[#fdf6f0]">
                                 <img
                                   src={img.url}
                                   alt={img.label}
@@ -598,21 +644,26 @@ export default function Pets() {
                                   }}
                                 />
 
-                                <div className="hidden h-full w-full items-center justify-center text-5xl">
+                                <div className="hidden h-full w-full items-center justify-center text-4xl">
                                   {img.fallback}
                                 </div>
 
                                 {active && (
-                                  <div className="absolute inset-0 flex items-center justify-center bg-[#6b3a2a]/20">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md">
-                                      <Check className="h-5 w-5 text-[#6b3a2a]" />
-                                    </div>
+                                  <div className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-md">
+                                    <Check className="h-4 w-4 text-[#6b3a2a]" />
                                   </div>
                                 )}
                               </div>
 
-                              <div className="bg-white px-3 py-3 text-sm font-medium text-[#3d1a0d]">
-                                {img.label}
+                              <div className="flex items-center justify-between gap-2 px-2 py-2">
+                                <span className="truncate text-sm font-medium text-[#3d1a0d]">
+                                  {img.label}
+                                </span>
+                                {active && (
+                                  <span className="shrink-0 rounded-full bg-[#6b3a2a] px-2 py-0.5 text-[10px] text-white">
+                                    已選
+                                  </span>
+                                )}
                               </div>
                             </button>
                           );
