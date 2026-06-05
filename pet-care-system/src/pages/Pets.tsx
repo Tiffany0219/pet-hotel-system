@@ -15,6 +15,7 @@ import {
   RefreshCcw,
   Check,
   ShieldCheck,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -172,6 +173,37 @@ export default function Pets() {
     setFormData(initial);
     setShowForm(false);
     setEditingPet(null);
+  };
+
+  const uploadPetImage = (file: File | undefined) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("請選擇圖片檔案");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("圖片請小於 2MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) {
+        toast.error("圖片讀取失敗");
+        return;
+      }
+
+      setFormData((current) => ({
+        ...current,
+        imageUrl: result,
+      }));
+      toast.success("寵物照片已選擇");
+    };
+    reader.onerror = () => toast.error("圖片讀取失敗");
+    reader.readAsDataURL(file);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -490,68 +522,103 @@ export default function Pets() {
 
                 <div className="md:col-span-2">
                   <Field label="選擇寵物照片">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      {selectedImages.map((img) => {
-                        const active = formData.imageUrl === img.url;
+                    <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+                      <div className="rounded-3xl border border-[#eadfd8] bg-[#fffaf6] p-4 shadow-[0_14px_34px_rgba(80,53,42,0.06)]">
+                        <div className="relative aspect-square overflow-hidden rounded-3xl bg-white">
+                          {formData.imageUrl ? (
+                            <img
+                              src={formData.imageUrl}
+                              alt="目前寵物照片"
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-6xl">
+                              {emoji(formData.species)}
+                            </div>
+                          )}
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#3d1a0d]/70 to-transparent p-4 text-white">
+                            <p className="text-sm">目前照片</p>
+                            <p className="text-xs text-white/75">可使用預設圖或自己上傳</p>
+                          </div>
+                        </div>
 
-                        return (
-                          <button
-                            key={img.url}
-                            type="button"
-                            onClick={() =>
-                              setFormData({
-                                ...formData,
-                                imageUrl: img.url,
-                              })
-                            }
-                            className={`relative overflow-hidden rounded-3xl border-2 transition-all ${
-                              active
-                                ? "border-[#6b3a2a] shadow-lg scale-[1.02]"
-                                : "border-[#eadfd8] hover:border-[#c8a97e]"
-                            }`}
-                          >
-                            <div className="relative h-32 bg-[#fdf6f0]">
-                              <img
-                                src={img.url}
-                                alt={img.label}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  const target = e.currentTarget;
-                                  target.style.display = "none";
+                        <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-full bg-[#6b3a2a] px-4 py-3 text-sm text-white shadow-md transition hover:bg-[#8b5040]">
+                          <Upload className="h-4 w-4" />
+                          上傳照片
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(event) => uploadPetImage(event.target.files?.[0])}
+                          />
+                        </label>
+                        <p className="mt-2 text-center text-xs text-gray-500">
+                          支援 JPG、PNG，建議小於 2MB
+                        </p>
+                      </div>
 
-                                  const fallback =
-                                    target.nextElementSibling as HTMLElement | null;
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                        {selectedImages.map((img) => {
+                          const active = formData.imageUrl === img.url;
 
-                                  if (fallback) {
-                                    fallback.style.display = "flex";
-                                  }
-                                }}
-                              />
+                          return (
+                            <button
+                              key={img.url}
+                              type="button"
+                              onClick={() =>
+                                setFormData({
+                                  ...formData,
+                                  imageUrl: img.url,
+                                })
+                              }
+                              className={`group relative overflow-hidden rounded-3xl border transition-all ${
+                                active
+                                  ? "border-[#6b3a2a] bg-[#fdf0e0] shadow-lg"
+                                  : "border-[#eadfd8] bg-white hover:border-[#c8a97e] hover:shadow-md"
+                              }`}
+                            >
+                              <div className="relative h-28 bg-[#fdf6f0]">
+                                <img
+                                  src={img.url}
+                                  alt={img.label}
+                                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    target.style.display = "none";
 
-                              <div className="hidden w-full h-full items-center justify-center text-5xl">
-                                {img.fallback}
+                                    const fallback =
+                                      target.nextElementSibling as HTMLElement | null;
+
+                                    if (fallback) {
+                                      fallback.style.display = "flex";
+                                    }
+                                  }}
+                                />
+
+                                <div className="hidden h-full w-full items-center justify-center text-5xl">
+                                  {img.fallback}
+                                </div>
+
+                                {active && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-[#6b3a2a]/20">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md">
+                                      <Check className="h-5 w-5 text-[#6b3a2a]" />
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
-                              {active && (
-                                <div className="absolute inset-0 bg-[#6b3a2a]/25 flex items-center justify-center">
-                                  <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-md">
-                                    <Check className="w-5 h-5 text-[#6b3a2a]" />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="bg-white px-3 py-2 text-sm text-[#3d1a0d]">
-                              {img.label}
-                            </div>
-                          </button>
-                        );
-                      })}
+                              <div className="bg-white px-3 py-3 text-sm font-medium text-[#3d1a0d]">
+                                {img.label}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-
-                    <p className="text-xs text-gray-500 mt-3">
-                      目前先提供預設照片選擇，之後也可以再升級成上傳照片功能。
-                    </p>
                   </Field>
                 </div>
 
