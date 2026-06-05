@@ -13,7 +13,7 @@
 4. 後端服務設定：
    - Root Directory：`pet-care-backend/pet-care-backend`
    - Build Command：`pip install -r requirements.txt`
-   - Start Command：`python -m gunicorn app:app`
+   - Start Command：`python3 -m gunicorn app:app`
 5. 環境變數：
    - `PET_CARE_SECRET_KEY`：請用一段隨機字串
    - `FRONTEND_ORIGINS`：填入 Vercel 前端網址，例如 `https://你的前端網址.vercel.app`
@@ -41,7 +41,7 @@ ERROR: Could not open requirements file: No such file or directory: 'requirement
 ```txt
 Root Directory = pet-care-backend/pet-care-backend
 Build Command = pip install -r requirements.txt
-Start Command = python -m gunicorn app:app
+Start Command = python3 -m gunicorn app:app
 ```
 
 儲存後按 **Manual Deploy > Deploy latest commit**。
@@ -50,7 +50,7 @@ Start Command = python -m gunicorn app:app
 
 ```txt
 Build Command = pip install -r requirements.txt
-Start Command = python -m gunicorn --chdir pet-care-backend/pet-care-backend app:app
+Start Command = python3 -m gunicorn --chdir pet-care-backend/pet-care-backend app:app
 ```
 
 ## 2. 前端部署到 Vercel
