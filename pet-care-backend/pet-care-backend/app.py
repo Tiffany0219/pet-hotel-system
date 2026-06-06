@@ -298,20 +298,10 @@ ADD_ON_SERVICES = {
         "price": 200,
         "description": "依家長交代協助用藥、觀察食慾與精神。",
     },
-    "care_report": {
-        "name": "照片照護回報",
-        "price": 150,
-        "description": "服務期間提供照片與照護狀態回報。",
-    },
     "walk": {
         "name": "散步加購",
         "price": 180,
         "description": "住宿或托育期間加一次散步活動。",
-    },
-    "checkout_grooming": {
-        "name": "退房前洗澡",
-        "price": 500,
-        "description": "住宿退房前協助基礎洗澡整理。",
     },
 }
 

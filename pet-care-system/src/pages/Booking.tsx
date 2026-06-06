@@ -236,7 +236,10 @@ export default function Booking() {
       ? serviceCatalog.roomPrices[formData.roomType] * days()
       : serviceCatalog.groomingPrices[formData.groomingService];
 
-  const addOnOptions = Object.values(serviceCatalog.addOnServices);
+  const hiddenAddOnIds = new Set(["care_report", "checkout_grooming"]);
+  const addOnOptions = Object.values(serviceCatalog.addOnServices).filter(
+    (option) => !hiddenAddOnIds.has(option.id)
+  );
   const selectedAddOns = addOnOptions.filter((option) =>
     formData.addOnItems.includes(option.id)
   );
