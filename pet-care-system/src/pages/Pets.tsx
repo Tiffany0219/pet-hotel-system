@@ -90,8 +90,8 @@ type PetForm = {
   name: string;
   species: string;
   breed: string;
-  age: number;
-  weight: number;
+  age: number | "";
+  weight: number | "";
   gender: string;
   notes: string;
   imageUrl: string;
@@ -107,8 +107,8 @@ const initial: PetForm = {
   name: "",
   species: "狗",
   breed: "",
-  age: 0,
-  weight: 0,
+  age: "",
+  weight: "",
   gender: "公",
   notes: "",
   imageUrl: "/images/pets/dog-1.jpg",
@@ -239,12 +239,22 @@ export default function Pets() {
       return;
     }
 
-    if (formData.age < 0) {
+    if (formData.age === "" || !Number.isFinite(Number(formData.age))) {
+      toast.error("請輸入年齡");
+      return;
+    }
+
+    if (Number(formData.age) < 0) {
       toast.error("年齡不可小於 0");
       return;
     }
 
-    if (formData.weight < 0) {
+    if (formData.weight === "" || !Number.isFinite(Number(formData.weight))) {
+      toast.error("請輸入體重");
+      return;
+    }
+
+    if (Number(formData.weight) < 0) {
       toast.error("體重不可小於 0");
       return;
     }
@@ -266,7 +276,11 @@ export default function Pets() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          age: Number(formData.age),
+          weight: Number(formData.weight),
+        }),
       });
 
       const data = await response.json();
@@ -294,8 +308,8 @@ export default function Pets() {
       name: pet.name,
       species: pet.species,
       breed: pet.breed,
-      age: Number(pet.age) || 0,
-      weight: Number(pet.weight) || 0,
+      age: Number(pet.age),
+      weight: Number(pet.weight),
       gender: pet.gender,
       notes: pet.notes || "",
       allergies: pet.allergies || "",
@@ -524,14 +538,20 @@ export default function Pets() {
                   <input
                     type="number"
                     value={formData.age}
+                    placeholder="請輸入年齡"
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        age: Number(e.target.value),
-                      })
+                      setFormData((current) => ({
+                        ...current,
+                        age:
+                          e.target.value === ""
+                            ? ""
+                            : e.target.valueAsNumber,
+                      }))
                     }
+                    onFocus={(e) => e.currentTarget.select()}
                     className="input-soft"
                     min="0"
+                    step="1"
                     required
                   />
                 </Field>
@@ -540,12 +560,17 @@ export default function Pets() {
                   <input
                     type="number"
                     value={formData.weight}
+                    placeholder="請輸入體重"
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        weight: Number(e.target.value),
-                      })
+                      setFormData((current) => ({
+                        ...current,
+                        weight:
+                          e.target.value === ""
+                            ? ""
+                            : e.target.valueAsNumber,
+                      }))
                     }
+                    onFocus={(e) => e.currentTarget.select()}
                     className="input-soft"
                     min="0"
                     step="0.1"
