@@ -264,7 +264,7 @@ export default function Dashboard() {
 
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-8 grid gap-4 md:grid-cols-4">
+          <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               icon={<PawPrint className="h-5 w-5" />}
               label="毛孩資料"
@@ -612,15 +612,17 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className="rounded-3xl border border-[#f0e6df] bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClass}`}>
+    <div className="flex min-h-[190px] flex-col items-center justify-center rounded-3xl border border-[#f0e6df] bg-white px-5 py-6 text-center shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div className="mb-4 flex flex-col items-center gap-3">
+        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${toneClass}`}>
           {icon}
         </div>
-        <p className="text-xs text-gray-400">{label}</p>
+        <p className="text-sm font-medium text-gray-500">{label}</p>
       </div>
-      <p className="text-3xl text-[#3d1a0d]">{value}</p>
-      <p className="mt-2 text-xs leading-relaxed text-gray-500">{hint}</p>
+      <p className="text-3xl font-medium text-[#3d1a0d]">{value}</p>
+      <p className="mt-2 min-h-10 max-w-[220px] text-xs leading-relaxed text-gray-500">
+        {hint}
+      </p>
     </div>
   );
 }
