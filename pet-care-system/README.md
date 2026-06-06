@@ -1,115 +1,266 @@
-# 毛孩樂園｜寵物住宿與美容預約系統
+# 毛孩樂園前端
 
-這是一個以 React + Vite + Tailwind CSS 製作的寵物住宿與美容管理系統，搭配 Flask + SQLite 後端 API 使用。
+毛孩樂園前端使用 React、TypeScript、Vite 與 Tailwind CSS 製作，提供公開服務頁面、會員中心、店務管理後台、美容師與照護師工作台，以及系統管理功能。
 
-## 功能
+## 線上網站
 
-- 首頁品牌介紹與多圖輪播
-- 服務項目瀏覽：住宿、美容、日間托育、餵藥與特殊照護、照護回報、接送與加購
-- 住宿房型瀏覽
-- 美容方案瀏覽
-- 分店資訊瀏覽
-- 會員登入 / 註冊
-- 會員中心
-- 寵物資料新增、編輯、刪除
-- 寵物健康資料：過敏、疾病 / 用藥、疫苗日期、獸醫院與緊急聯絡人
-- 線上預約住宿或美容服務
-- 預約可選擇加購服務，例如接送、餵藥照護、照片回報、散步與退房前洗澡
-- 我的訂單列表
-- 前台 / 店務端預約狀態自動同步
+[https://pet-hotel-system-oo4k.vercel.app](https://pet-hotel-system-oo4k.vercel.app)
+
+## 技術
+
+- React 18
+- TypeScript
+- Vite 6
+- Tailwind CSS 4
+- React Router 7
+- Lucide React
+- Sonner
+- date-fns
+
+## 頁面路由
+
+| 路由 | 頁面 | 權限 |
+| --- | --- | --- |
+| `/` | 首頁 | 公開 |
+| `/services` | 服務項目 | 公開 |
+| `/rooms` | 住宿房型 | 公開 |
+| `/grooming` | 美容服務 | 公開 |
+| `/branches` | 分店資訊 | 公開 |
+| `/about` | 關於我們 | 公開 |
+| `/login` | 登入與註冊 | 公開 |
+| `/dashboard` | 會員中心 | 登入會員 |
+| `/pets` | 寵物資料 | 登入會員 |
+| `/booking` | 線上預約 | 登入會員 |
+| `/orders` | 訂單與歷史紀錄 | 登入會員 |
+| `/orders/:id` | 訂單詳情 | 登入會員 |
+| `/notifications` | 通知中心 | 登入會員 |
+| `/admin` | 店務／系統管理後台 | 店務人員、系統管理員 |
+| `/workbench` | 美容／照護工作台 | 店務人員、美容師、照護師、系統管理員 |
+
+## 公開介面
+
+### 首頁
+
+- 品牌與服務介紹
+- 住宿空間圖片輪播
+- 房況摘要
+- 最近照護回報
+- 立即預約與服務導覽
+
+### 服務項目
+
+- 寵物住宿
+- 美容服務
+- 日間托育
+- 餵藥與特殊照護
+- 照護回報
+- 接送服務
+- 彈窗顯示服務細節
+
+### 住宿房型
+
+- 房型圖片與特色
+- 每晚價格
+- 適合寵物類型
+- 入住時間、攜帶物品與取消規則
+
+### 美容服務
+
+- 基礎洗澡護理
+- 造型剪毛設計
+- SPA 深層護理
+- 服務內容與起始價格
+
+### 分店資訊
+
+- 分店照片
+- 地址、電話、Email 與營業時間
+- 各分店服務項目與特色
+- Google Maps 連結
+
+## 會員端
+
+### 會員中心
+
+- 毛孩資料數量
+- 今日預約
+- 待付款訂單
+- 未讀通知
+- 會員資料編輯
+- 快速前往預約、寵物與訂單頁
+
+### 寵物資料
+
+- 新增、編輯與刪除寵物
+- 物種、性別、品種、年齡與體重
+- 過敏、用藥、疫苗、獸醫與緊急聯絡資料
+- 預設圖片選擇
+- 自行上傳寵物照片
+
+### 預約
+
+- 住宿與美容服務切換
+- 四步驟進度顯示
+- 寵物卡片選擇
+- 房型或美容項目選擇
+- 日期與美容時段選擇
+- 房況與時段剩餘數量
+- 接送、餵藥照護與散步加購
+- 即時價格與預約摘要
+
+### 訂單與通知
+
+- 進行中訂單
+- 已完成與已取消歷史紀錄
 - 模擬付款
-- 服務評價
-- 店務管理後台：今日工作台、房況管理、訂單查詢、營收與會員統計
-- 系統管理員可控管營運設定，例如員工帳號、服務價格、房位、美容台、營業班表與通知規則
-- 今日工作台只顯示待確認、今日入住 / 退房、今日美容與進行中服務
-- 訂單查詢預設只顯示最近 10 筆，可用搜尋與篩選查看歷史訂單
-- 店務人員可為住宿訂單安排房位，為美容訂單安排美容台與時段
-- 系統管理員可在營運設定維護員工帳號、服務價格、可用房位、美容台與美容時段
-- 系統會檢查同一房位住宿期間、同一美容台時段不可重複安排
-- 店務端預約詳情：查看客戶資訊、預約內容與寵物照護資料
-- 店務端可紀錄付款狀態、付款方式、訂金與尾款
-- 店務端可新增照護紀錄 / 店家回報，並選擇是否顯示給客戶
-- 店務端可查看訂單狀態、安排、付款與照護紀錄的操作紀錄
-- 前台會員可在訂單中查看店家公開的照護回報
-- 會員端右上角通知鈴鐺，可查看店家回報與系統通知，已讀後會從鈴鐺清單消失
-- 系統會在預約前幾天產生會員確認通知，會員確認後預約才維持成立；若會員取消，原本安排的位置會釋出
-- 會員端可查詢歷史訂單，已完成與已取消訂單不會長期佔據主要列表
-- 美容師與寵物照護師有專屬工作台，可查看排程、打卡、回報異常與完成服務
-- 美容師與寵物照護師的訂單卡片可收合，完成後可上傳照片給家長查看
-- 櫃檯、店務人員、美容師與照護師皆支援上班 / 下班打卡紀錄
-- 前台取消預約與刪除寵物使用系統內確認視窗，不再跳出瀏覽器原生提示
+- 取消預約
+- 預約前再次確認
+- 照護紀錄與完成照片
+- 服務評分與評論
+- 通知已讀與全部已讀
 
-## 測試帳號
+## 店務管理後台
 
-一般會員：
+- 今日營運總覽
+- 今日入住、退房、美容與進行中服務
+- 待確認與待付款項目
+- 訂單搜尋、篩選與分頁
+- 會員快速查詢
+- 現場建立會員訂單
+- 安排住宿房位
+- 安排美容台與美容時段
+- 辦理入住與退房
+- 付款、收據與尾款管理
+- 電話、LINE 等聯絡紀錄
+- 交班備註與操作歷程
+- 房況、營收、會員與服務圖表
+- CSV 營運資料匯出
 
-- Email：demo@test.com
-- Password：demo123
+## 美容師與照護師工作台
 
-店務人員：
+- 個人今日排程
+- 上班與下班打卡
+- 可收合的訂單卡片
+- 寵物健康資訊與家長備註
+- 服務狀態更新
+- 新增照護或美容回報
+- 發送異常通知
+- 完成服務後上傳照片
 
-- Email：staff@test.com
-- Password：staff123
+## 系統管理
 
-美容師：
+- 員工帳號與角色管理
+- 服務與價格設定
+- 房位、美容台與美容時段設定
+- 員工班表
+- 營業時間與公休日
+- 預約與付款提醒規則
+- 系統資料備份
 
-- Email：groomer@test.com
-- Password：groomer123
+## 專案結構
 
-寵物照護師：
-
-- Email：caregiver@test.com
-- Password：care123
-
-系統管理員：
-
-- Email：admin@test.com
-- Password：admin123
-
-登入後會依帳號角色自動導向：
-
-- 一般會員：`/dashboard`
-- 店務人員：`/admin`
-- 美容師：`/workbench`
-- 寵物照護師：`/workbench`
-- 系統管理員：`/admin`
-
-## 執行方式
-
-請先啟動後端 API：
-
-```bash
-cd ../pet-care-backend/pet-care-backend
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python app.py
+```text
+src/
+├── components/
+│   ├── ConfirmDialog.tsx
+│   ├── Layout.tsx
+│   ├── MemberBackButton.tsx
+│   ├── RequireAdmin.tsx
+│   ├── RequireAuth.tsx
+│   └── RequireWorker.tsx
+├── contexts/
+│   └── AuthContext.tsx
+├── pages/
+│   ├── Home.tsx
+│   ├── Services.tsx
+│   ├── Rooms.tsx
+│   ├── Grooming.tsx
+│   ├── Branches.tsx
+│   ├── About.tsx
+│   ├── Login.tsx
+│   ├── Dashboard.tsx
+│   ├── Pets.tsx
+│   ├── Booking.tsx
+│   ├── Orders.tsx
+│   ├── OrderDetail.tsx
+│   ├── Notifications.tsx
+│   ├── AdminDashboard.tsx
+│   └── WorkerDashboard.tsx
+├── App.tsx
+├── config.ts
+├── systemSettings.ts
+└── types.ts
 ```
 
-後端預設會啟動在：
+## 本機啟動
+
+後端需先啟動在 `http://127.0.0.1:5050`。
 
 ```bash
-http://127.0.0.1:5050
-```
-
-接著啟動前端：
-
-```bash
+cd pet-care-system
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-如果未來後端 API 不在 `http://127.0.0.1:5050/api`，可複製 `.env.example` 成 `.env`，並調整：
+預設網址：
 
-```bash
-VITE_API_BASE_URL=http://你的後端網址/api
-```
-
-接著打開終端機顯示的本機網址，例如：
-
-```bash
+```text
 http://127.0.0.1:5181
 ```
 
-## 資料儲存
+## 環境變數
 
-會員、寵物、訂單、付款與評價資料由 Flask API 寫入 SQLite 資料庫。前端只會在 `localStorage` 保存登入用的 JWT token。
+`.env`：
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:5050/api
+```
+
+若未設定，前端會使用：
+
+```text
+http://127.0.0.1:5050/api
+```
+
+修改 `.env` 後需要重新啟動 Vite。
+
+## 可用指令
+
+```bash
+npm run dev       # 啟動開發伺服器
+npm run build     # 建立正式版本
+npm run preview   # 預覽正式版本
+npx tsc --noEmit  # TypeScript 型別檢查
+```
+
+## 登入與權限
+
+- JWT Token 儲存在 `localStorage` 的 `token`。
+- `RequireAuth` 保護會員頁面。
+- `RequireAdmin` 限制店務人員與系統管理員。
+- `RequireWorker` 限制店務、美容、照護與系統管理角色。
+- 登入後會依角色導向對應介面。
+
+## Vercel 部署
+
+```text
+Root Directory: pet-care-system
+Framework Preset: Vite
+Build Command: npm run build
+Output Directory: dist
+```
+
+環境變數：
+
+```env
+VITE_API_BASE_URL=https://你的-render-網址/api
+```
+
+`vercel.json` 已設定 SPA Rewrite，直接重新整理 `/admin`、`/orders` 等子路由不會出現 404。
+
+## 相關文件
+
+- [完整專案 README](../README.md)
+- [後端 API README](../pet-care-backend/pet-care-backend/README.md)
+- [部署說明](../DEPLOYMENT.md)
