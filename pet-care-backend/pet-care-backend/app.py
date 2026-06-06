@@ -3628,6 +3628,65 @@ def seed_demo_dataset():
     db.session.commit()
 
 
+LEGACY_DEMO_MEMBER_EMAILS = [
+    "tiffany.member@test.com",
+    "lin.member@test.com",
+    "chen.member@test.com",
+]
+
+LEGACY_DEMO_SHIFT_NOTES = [
+    "今日入住與退房櫃檯",
+    "美容台 G-01、G-02",
+    "住宿巡房與晚餐照護",
+    "電話確認隔日預約",
+]
+
+
+def remove_legacy_demo_dataset():
+    demo_members = User.query.filter(User.email.in_(LEGACY_DEMO_MEMBER_EMAILS)).all()
+    member_ids = [member.id for member in demo_members]
+
+    if member_ids:
+        order_ids = [
+            order_id
+            for (order_id,) in (
+                db.session.query(Order.id)
+                .filter(Order.user_id.in_(member_ids))
+                .all()
+            )
+        ]
+
+        Notification.query.filter(Notification.user_id.in_(member_ids)).delete(
+            synchronize_session=False
+        )
+
+        if order_ids:
+            Notification.query.filter(Notification.order_id.in_(order_ids)).delete(
+                synchronize_session=False
+            )
+            CareLog.query.filter(CareLog.order_id.in_(order_ids)).delete(
+                synchronize_session=False
+            )
+            AuditLog.query.filter(AuditLog.order_id.in_(order_ids)).delete(
+                synchronize_session=False
+            )
+
+        CareLog.query.filter(CareLog.author_id.in_(member_ids)).delete(
+            synchronize_session=False
+        )
+        AuditLog.query.filter(AuditLog.actor_id.in_(member_ids)).delete(
+            synchronize_session=False
+        )
+
+        for member in demo_members:
+            db.session.delete(member)
+
+    StaffShift.query.filter(StaffShift.note.in_(LEGACY_DEMO_SHIFT_NOTES)).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+
+
 def ensure_order_assignment_columns():
     existing_columns = {
         row[1]
@@ -3715,6 +3774,7 @@ with app.app_context():
     ensure_order_assignment_columns()
     ensure_pet_health_columns()
     ensure_care_log_photo_column()
+    remove_legacy_demo_dataset()
     seed_demo_user()
     seed_staff_user()
     seed_worker_user(
@@ -3732,7 +3792,6 @@ with app.app_context():
         "caregiver",
     )
     seed_admin_user()
-    seed_demo_dataset()
 
 
 if __name__ == "__main__":
